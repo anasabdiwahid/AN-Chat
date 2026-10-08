@@ -113,6 +113,59 @@
 .avatar-lg { width: 64px; height: 64px; font-size: 24px; }
 .avatar-xl { width: 96px; height: 96px; font-size: 36px; }
 
+/* Avatar Upload Preview Component */
+.avatar-upload-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.avatar-upload-preview {
+    width: 96px;
+    height: 96px;
+    border-radius: var(--radius-full);
+    background: var(--primary-light);
+    border: 3px solid var(--primary);
+    box-shadow: 0 4px 14px rgba(var(--primary-rgb), 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    transition: var(--transition);
+}
+
+.avatar-upload-preview:hover {
+    border-color: var(--primary-dark);
+    transform: scale(1.04);
+}
+
+.avatar-upload-preview img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: cover !important;
+    border-radius: var(--radius-full);
+    display: block;
+}
+
+.avatar-upload-hint {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+.avatar-upload-hint:hover {
+    color: var(--primary);
+}
+
 /* Status Indicator Dot */
 .status-dot {
     position: absolute;

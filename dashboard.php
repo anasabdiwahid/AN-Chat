@@ -384,8 +384,9 @@ $userAvatar = $currentUser['profile_image'] ?
             <form id="profileEditForm" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="avatar-upload-box">
-                        <label for="editAvatarInput" class="avatar-upload-preview">
-                            <img src="<?= htmlspecialchars($userAvatar) ?>" id="editAvatarPreviewImg" alt="Avatar">
+                        <label for="editAvatarInput" class="avatar-upload-preview" title="Click to change photo">
+                            <img src="<?= htmlspecialchars($userAvatar) ?>" id="editAvatarPreviewImg" alt="Avatar" onerror="this.src='assets/images/default-avatar.png'">
+                            <span style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;padding:3px 0;text-align:center;"><i class="fas fa-camera"></i></span>
                         </label>
                         <span class="avatar-upload-hint">Click to change photo</span>
                         <input type="file" id="editAvatarInput" name="profile_image" accept="image/*" style="display:none;" onchange="
