@@ -32,7 +32,7 @@ class FriendsManager {
 
             let html = '';
             data.data.forEach(u => {
-                const avatar = u.profile_image ? (u.profile_image.startsWith('http') ? u.profile_image : 'uploads/images/' + u.profile_image) : 'assets/images/default-avatar.png';
+                const avatar = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(u.profile_image) : (u.profile_image || 'assets/images/default-avatar.png');
                 let btnHtml = '';
 
                 if (u.is_friend > 0) {

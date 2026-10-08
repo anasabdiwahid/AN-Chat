@@ -17,7 +17,9 @@ if (!$currentUser) {
 }
 
 $userAvatar = $currentUser['profile_image'] ? 
-    (str_starts_with($currentUser['profile_image'], 'http') ? $currentUser['profile_image'] : 'uploads/images/' . $currentUser['profile_image']) : 
+    (str_starts_with($currentUser['profile_image'], 'http') || str_starts_with($currentUser['profile_image'], 'assets/') || str_starts_with($currentUser['profile_image'], 'uploads/')
+        ? $currentUser['profile_image'] 
+        : 'uploads/images/' . $currentUser['profile_image']) : 
     'assets/images/default-avatar.png';
 ?>
 <!DOCTYPE html>
@@ -276,7 +278,7 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- A. Incoming Call Screen -->
         <div class="incoming-call-box" id="incomingCallBox" style="display:none;">
             <div class="incoming-call-avatar">
-                <img id="incomingCallerAvatar" src="assets/images/default-avatar.png" alt="Caller">
+                <img id="incomingCallerAvatar" src="assets/images/default-avatar.png" alt="Caller" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
             </div>
             <div>
                 <div class="incoming-call-name" id="incomingCallerName">Caller Name</div>
@@ -301,7 +303,7 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- B. Active Voice Call Screen -->
         <div class="active-voice-box" id="activeVoiceBox" style="display:none;">
             <div class="incoming-call-avatar" style="width:140px;height:140px;">
-                <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer">
+                <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
             </div>
             <div style="font-size:24px;font-weight:700;" id="voiceCallPeerName">Anas Abdiwahid</div>
             <div class="call-timer" id="callTimerDisplay" style="display:none;">00:00</div>
@@ -516,6 +518,25 @@ $userAvatar = $currentUser['profile_image'] ?
 
     <!-- Global Application State -->
     <script>
+        window.resolveAvatarUrl = function(img) {
+            if (!img || img === 'null' || img === 'undefined' || (typeof img === 'string' && img.trim() === '')) {
+                return 'assets/images/default-avatar.png';
+            }
+            if (typeof img !== 'string') return 'assets/images/default-avatar.png';
+            img = img.trim();
+            if (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('data:') || img.startsWith('blob:')) {
+                return img;
+            }
+            if (img.startsWith('assets/')) {
+                return img;
+            }
+            if (img.startsWith('uploads/')) {
+                return img;
+            }
+            return 'uploads/images/' + img;
+        };
+        window.resolveAvatar = window.resolveAvatarUrl;
+
         window.CURRENT_USER = <?= json_encode([
             'id' => (int)$currentUser['id'],
             'fullname' => $currentUser['fullname'],

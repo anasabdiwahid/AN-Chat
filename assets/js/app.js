@@ -1,5 +1,26 @@
 // assets/js/app.js - Master Dashboard Application Controller
 
+if (typeof window.resolveAvatarUrl !== 'function') {
+    window.resolveAvatarUrl = function(img) {
+        if (!img || img === 'null' || img === 'undefined' || (typeof img === 'string' && img.trim() === '')) {
+            return 'assets/images/default-avatar.png';
+        }
+        if (typeof img !== 'string') return 'assets/images/default-avatar.png';
+        img = img.trim();
+        if (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('data:') || img.startsWith('blob:')) {
+            return img;
+        }
+        if (img.startsWith('assets/')) {
+            return img;
+        }
+        if (img.startsWith('uploads/')) {
+            return img;
+        }
+        return 'uploads/images/' + img;
+    };
+    window.resolveAvatar = window.resolveAvatarUrl;
+}
+
 class WebSocketClient {
     constructor(url, userId) {
         this.url = url;
@@ -365,7 +386,7 @@ async function loadChatsList(filterQuery = '') {
 
         let html = '';
         filtered.forEach(f => {
-            const avatar = f.profile_image ? (f.profile_image.startsWith('http') ? f.profile_image : 'uploads/images/' + f.profile_image) : 'assets/images/default-avatar.png';
+            const avatar = window.resolveAvatarUrl(f.profile_image);
             const unreadCount = parseInt(f.unread_count) || 0;
             const hasUnread = unreadCount > 0;
 
@@ -423,7 +444,7 @@ async function loadFriendsList() {
         if (dataP.success && dataP.data && dataP.data.length > 0) {
             html += `<div style="padding:10px 18px 4px;font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;">Friend Requests (${dataP.data.length})</div>`;
             dataP.data.forEach(p => {
-                const avatar = p.profile_image ? (p.profile_image.startsWith('http') ? p.profile_image : 'uploads/images/' + p.profile_image) : 'assets/images/default-avatar.png';
+                const avatar = window.resolveAvatarUrl(p.profile_image);
                 html += `
                     <div class="list-item" id="req-item-${p.id}">
                         <div class="avatar avatar-md">
@@ -446,7 +467,7 @@ async function loadFriendsList() {
         html += `<div style="padding:14px 18px 4px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;">All Friends</div>`;
         if (dataF.success && dataF.data && dataF.data.length > 0) {
             dataF.data.forEach(f => {
-                const avatar = f.profile_image ? (f.profile_image.startsWith('http') ? f.profile_image : 'uploads/images/' + f.profile_image) : 'assets/images/default-avatar.png';
+                const avatar = window.resolveAvatarUrl(f.profile_image);
                 html += `
                     <div class="list-item">
                         <div class="avatar avatar-md">
@@ -503,7 +524,7 @@ async function loadCallsList() {
 
         let html = '';
         data.data.forEach(c => {
-            const avatar = c.other_user_image ? (c.other_user_image.startsWith('http') ? c.other_user_image : 'uploads/images/' + c.other_user_image) : 'assets/images/default-avatar.png';
+            const avatar = window.resolveAvatarUrl(c.other_user_image);
             const isMissed = (c.status === 'missed' || c.status === 'declined');
             const isVideo = (c.call_type === 'video');
 

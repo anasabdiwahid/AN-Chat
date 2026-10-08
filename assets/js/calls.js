@@ -108,7 +108,13 @@ class CallController {
         this.voiceBox.style.display = 'flex';
         document.getElementById('voiceCallPeerName').textContent = peerName;
         const imgEl = document.getElementById('voiceCallPeerAvatar');
-        if (imgEl) imgEl.src = peerImage || 'assets/images/default-avatar.png';
+        if (imgEl) {
+            const resolved = typeof window.resolveAvatarUrl === 'function'
+                ? window.resolveAvatarUrl(peerImage)
+                : (peerImage || 'assets/images/default-avatar.png');
+            imgEl.onerror = () => { imgEl.onerror = null; imgEl.src = 'assets/images/default-avatar.png'; };
+            imgEl.src = resolved;
+        }
 
         // IMPORTANT: Start in "Calling..." state and HIDE timer until call is answered
         if (this.statusTextEl) {
@@ -152,7 +158,11 @@ class CallController {
 
         const avatarEl = document.getElementById('incomingCallerAvatar');
         if (avatarEl) {
-            avatarEl.src = payload.caller_image ? (payload.caller_image.startsWith('http') ? payload.caller_image : 'uploads/images/' + payload.caller_image) : 'assets/images/default-avatar.png';
+            const resolved = typeof window.resolveAvatarUrl === 'function'
+                ? window.resolveAvatarUrl(payload.caller_image)
+                : (payload.caller_image || 'assets/images/default-avatar.png');
+            avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = 'assets/images/default-avatar.png'; };
+            avatarEl.src = resolved;
         }
 
         this.startRingtone();
@@ -171,6 +181,20 @@ class CallController {
             if (vTimer) vTimer.textContent = '00:00';
         } else {
             this.voiceBox.style.display = 'flex';
+            if (this.pendingIncomingPayload) {
+                const nameEl = document.getElementById('voiceCallPeerName');
+                if (nameEl && this.pendingIncomingPayload.caller_name) {
+                    nameEl.textContent = this.pendingIncomingPayload.caller_name;
+                }
+                const avatarEl = document.getElementById('voiceCallPeerAvatar');
+                if (avatarEl && this.pendingIncomingPayload.caller_image) {
+                    const resolved = typeof window.resolveAvatarUrl === 'function'
+                        ? window.resolveAvatarUrl(this.pendingIncomingPayload.caller_image)
+                        : (this.pendingIncomingPayload.caller_image || 'assets/images/default-avatar.png');
+                    avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = 'assets/images/default-avatar.png'; };
+                    avatarEl.src = resolved;
+                }
+            }
             if (this.statusTextEl) {
                 this.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
             }

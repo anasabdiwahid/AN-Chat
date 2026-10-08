@@ -45,6 +45,15 @@ $stmtCall = $db->prepare("
 ");
 $stmtCall->execute([':uid' => $currentUser['id']]);
 $incomingCall = $stmtCall->fetch();
+if ($incomingCall) {
+    if (!empty($incomingCall['caller_image'])) {
+        if (!str_starts_with($incomingCall['caller_image'], 'http') && !str_starts_with($incomingCall['caller_image'], 'assets/') && !str_starts_with($incomingCall['caller_image'], 'uploads/')) {
+            $incomingCall['caller_image'] = 'uploads/images/' . $incomingCall['caller_image'];
+        }
+    } else {
+        $incomingCall['caller_image'] = 'assets/images/default-avatar.png';
+    }
+}
 
 // Check unread counts
 $notifModel = new Notification();

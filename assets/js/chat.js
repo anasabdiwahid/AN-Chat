@@ -181,7 +181,8 @@ class ChatManager {
 
         const headerAvatar = document.getElementById('chatHeaderAvatar');
         if (headerAvatar) {
-            headerAvatar.src = friendAvatar || 'assets/images/default-avatar.png';
+            headerAvatar.onerror = () => { headerAvatar.onerror = null; headerAvatar.src = 'assets/images/default-avatar.png'; };
+            headerAvatar.src = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(friendAvatar) : (friendAvatar || 'assets/images/default-avatar.png');
         }
 
         // Hide Empty State and Show Active Chat UI

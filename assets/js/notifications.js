@@ -31,7 +31,7 @@ class NotificationManager {
             `;
 
             data.data.notifications.forEach(n => {
-                const avatar = n.sender_image ? (n.sender_image.startsWith('http') ? n.sender_image : 'uploads/images/' + n.sender_image) : 'assets/images/default-avatar.png';
+                const avatar = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(n.sender_image) : (n.sender_image || 'assets/images/default-avatar.png');
                 const isUnread = n.is_read == 0;
                 
                 let iconClass = 'fa-bell';
