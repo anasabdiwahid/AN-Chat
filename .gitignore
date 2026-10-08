@@ -1,0 +1,19 @@
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary & Log files
+*.log
+*.tmp
+
+# Uploads content (ignore large user-generated test files, keep directory structure)
+uploads/images/*
+!uploads/images/.gitkeep
+!uploads/images/brand-avatar.jpg
+uploads/videos/*
+!uploads/videos/.gitkeep
+uploads/documents/*
+!uploads/documents/.gitkeep
+uploads/voice/*
+!uploads/voice/.gitkeep

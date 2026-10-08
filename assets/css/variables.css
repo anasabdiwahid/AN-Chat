@@ -1,0 +1,73 @@
+/* assets/css/variables.css - Color System and Typography */
+:root {
+    --primary: #E91E63;
+    --primary-dark: #C2185B;
+    --primary-light: #FCE4EC;
+    --primary-rgb: 233, 30, 99;
+
+    --accent: #FF4081;
+
+    --background: #FFF7FA;
+    --surface: #FFFFFF;
+    --surface-elevated: #FFFFFF;
+    --surface-hover: #FDF0F4;
+
+    --text-primary: #1F1F1F;
+    --text-secondary: #777777;
+    --text-muted: #9E9E9E;
+
+    --border: #F0D9E1;
+    --border-light: #F9EBF0;
+
+    --msg-mine: #FCE4EC;
+    --msg-mine-text: #1F1F1F;
+    --msg-theirs: #FFFFFF;
+    --msg-theirs-text: #1F1F1F;
+
+    --success: #22C55E;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --info: #3B82F6;
+
+    --shadow-sm: 0 2px 8px rgba(233, 30, 99, 0.04);
+    --shadow: 0 8px 30px rgba(233, 30, 99, 0.08);
+    --shadow-lg: 0 16px 40px rgba(233, 30, 99, 0.14);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-full: 9999px;
+
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark {
+    --background: #151015;
+    --surface: #211A20;
+    --surface-elevated: #2A2129;
+    --surface-hover: #32242F;
+
+    --text-primary: #FFFFFF;
+    --text-secondary: #B8AEB4;
+    --text-muted: #837880;
+
+    --border: #382B33;
+    --border-light: #2A2129;
+
+    --primary: #FF4081;
+    --primary-dark: #E91E63;
+    --primary-light: #2D1A25;
+    --primary-rgb: 255, 64, 129;
+
+    --accent: #FF80AB;
+
+    --msg-mine: #381A2A;
+    --msg-mine-text: #FDE8F1;
+    --msg-theirs: #251D24;
+    --msg-theirs-text: #FFFFFF;
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.7);
+}

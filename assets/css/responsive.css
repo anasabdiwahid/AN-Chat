@@ -1,0 +1,104 @@
+/* assets/css/responsive.css - Breakpoints: 320px, 768px, 1024px+ */
+
+@media (max-width: 767px) {
+    .nav-rail {
+        display: none;
+    }
+
+    .bottom-nav {
+        display: flex;
+    }
+
+    .middle-panel {
+        width: 100%;
+        height: calc(100% - 60px); /* Leave room for bottom nav */
+    }
+
+    .main-stage {
+        display: none;
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 100;
+    }
+
+    /* When user is in an active chat on mobile */
+    .app-container.chat-open .middle-panel {
+        display: none;
+    }
+
+    .app-container.chat-open .bottom-nav {
+        display: none;
+    }
+
+    .app-container.chat-open .main-stage {
+        display: flex;
+    }
+
+    .chat-back-btn {
+        display: inline-flex;
+    }
+
+    .chat-messages {
+        padding: 14px 12px;
+    }
+
+    .message-bubble {
+        max-width: 84%;
+    }
+
+    .pip-video-box {
+        width: 110px;
+        height: 150px;
+        bottom: 100px;
+        right: 16px;
+    }
+
+    .video-controls-bar {
+        bottom: 20px;
+        padding: 8px 16px;
+        gap: 12px;
+    }
+
+    .landing-hero h1 {
+        font-size: 32px;
+    }
+
+    .landing-hero p {
+        font-size: 15px;
+    }
+
+    .auth-card {
+        padding: 24px 20px;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .middle-panel {
+        width: 300px;
+    }
+
+    .nav-rail {
+        width: 64px;
+    }
+
+    .message-bubble {
+        max-width: 75%;
+    }
+}
+
+@media (min-width: 1024px) {
+    .middle-panel {
+        width: 380px;
+    }
+}
+
+@media (min-width: 1440px) {
+    .middle-panel {
+        width: 420px;
+    }
+}

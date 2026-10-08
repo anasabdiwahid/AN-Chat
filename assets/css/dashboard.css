@@ -1,0 +1,286 @@
+/* assets/css/dashboard.css - Layout, Sidebar, Column Split, and Navigation */
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    background-color: var(--background);
+}
+
+/* 1. Left Nav Rail (Icons & Main Sections) */
+.nav-rail {
+    width: 76px;
+    height: 100%;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 0 20px;
+    flex-shrink: 0;
+    z-index: 20;
+}
+
+.brand-badge {
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-badge img {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--primary);
+    object-fit: cover;
+    box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.2);
+}
+
+.nav-rail-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    flex: 1;
+}
+
+.nav-item {
+    position: relative;
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 20px;
+    transition: var(--transition);
+}
+
+.nav-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--primary);
+}
+
+.nav-item.active {
+    background-color: var(--primary-light);
+    color: var(--primary);
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: -13px;
+    top: 12px;
+    bottom: 12px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background-color: var(--primary);
+}
+
+.nav-item .badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 5px;
+    font-size: 10px;
+}
+
+.nav-rail-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+/* 2. Middle Panel (Chats / Friends / Calls / Notifications Lists) */
+.middle-panel {
+    width: 360px;
+    height: 100%;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+.middle-header {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.middle-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.search-box-container {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input-wrap svg,
+.search-input-wrap i {
+    position: absolute;
+    left: 12px;
+    color: var(--text-muted);
+}
+
+.search-input-wrap input {
+    width: 100%;
+    padding: 9px 12px 9px 36px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.search-input-wrap input:focus {
+    border-color: var(--primary);
+    background: var(--surface);
+}
+
+/* Middle List Items (Conversation items, Friend items, etc.) */
+.list-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.list-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+}
+
+.list-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.list-item.active {
+    background-color: var(--primary-light);
+}
+
+.list-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.list-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.list-item-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.list-item-time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.list-item-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.list-item-preview {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.list-item-preview.unread {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* 3. Main Stage (Right Column: Conversation / Call Area) */
+.main-stage {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Mobile Bottom Navigation Bar */
+.bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 900;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    width: 20%;
+    height: 100%;
+    position: relative;
+}
+
+.bottom-nav-item svg,
+.bottom-nav-item i {
+    font-size: 18px;
+}
+
+.bottom-nav-item.active {
+    color: var(--primary);
+}
+
+.bottom-nav-item .badge {
+    position: absolute;
+    top: 6px;
+    right: calc(50% - 16px);
+    font-size: 9px;
+    padding: 1px 4px;
+}
