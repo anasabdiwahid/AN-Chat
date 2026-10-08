@@ -16,6 +16,7 @@ $registered = !empty($_GET['registered']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — A/N Chat</title>
     <link rel="icon" type="image/png" href="assets/icons/favicon.png">
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
     <link rel="manifest" href="pwa/manifest.json">
     <meta name="theme-color" content="#E91E63">
 

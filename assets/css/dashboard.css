@@ -32,7 +32,7 @@
 .brand-badge img {
     width: 44px;
     height: 44px;
-    border-radius: var(--radius-full);
+    border-radius: 12px;
     border: 2px solid var(--primary);
     object-fit: cover;
     box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.2);

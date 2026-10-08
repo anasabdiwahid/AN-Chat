@@ -29,6 +29,7 @@ $userAvatar = $currentUser['profile_image'] ?
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A/N Chat — Connect. Chat. Call. Share.</title>
     <link rel="icon" type="image/png" href="assets/icons/favicon.png">
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
     <link rel="manifest" href="pwa/manifest.json">
     <meta name="theme-color" content="#E91E63">
 
@@ -122,7 +123,7 @@ $userAvatar = $currentUser['profile_image'] ?
         <main class="main-stage">
             <!-- Empty / Welcome state -->
             <div id="chatEmptyState" class="empty-state" style="margin:auto;max-width:440px;">
-                <img src="assets/images/logo.png" alt="A/N Chat" style="width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);box-shadow:var(--shadow);margin-bottom:12px;">
+                <img src="assets/images/logo.png" alt="A/N Chat" style="width:96px;height:96px;border-radius:40px;object-fit:cover;border:3px solid var(--primary);box-shadow:var(--shadow);margin-bottom:12px;">
                 <h1 style="font-size:26px;font-weight:800;color:var(--primary);">A/N Chat</h1>
                 <p style="font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Connect. Chat. Call. Share.</p>
                 <div class="empty-state-desc">Select a friend from the left sidebar or search a phone number to start instant real-time messaging, voice, or video calling.</div>
