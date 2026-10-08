@@ -240,3 +240,4 @@ class Message {
         return $map;
     }
 }
+

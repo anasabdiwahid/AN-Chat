@@ -111,3 +111,4 @@ function verifyCsrfToken(?string $token): bool {
 function cleanInput(string $data): string {
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
+

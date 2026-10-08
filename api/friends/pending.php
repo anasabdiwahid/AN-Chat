@@ -10,3 +10,4 @@ $friendModel = new Friend();
 $pending = $friendModel->getPendingRequests($currentUser['id']);
 
 jsonResponse(true, 'Pending requests', $pending);
+

@@ -28,3 +28,4 @@ if ($ok) {
 } else {
     jsonResponse(false, 'Failed to submit report.');
 }
+

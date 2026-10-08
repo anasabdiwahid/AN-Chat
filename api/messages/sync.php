@@ -55,3 +55,4 @@ jsonResponse(true, 'Sync status', [
     'incoming_call' => $incomingCall ?: null,
     'unread_notifications' => $unreadNotifs
 ]);
+

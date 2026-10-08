@@ -18,3 +18,4 @@ $msgModel = new Message();
 $messages = $msgModel->getConversation($currentUser['id'], $friendId, $limit, $beforeId);
 
 jsonResponse(true, 'Messages retrieved', $messages);
+

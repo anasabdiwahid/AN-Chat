@@ -21,3 +21,4 @@ if ($notifId > 0) {
 }
 
 jsonResponse($ok, 'Notifications updated.');
+

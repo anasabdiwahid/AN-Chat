@@ -27,3 +27,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $settings = $userModel->getSettings($currentUser['id']);
     jsonResponse(true, 'Settings loaded.', $settings);
 }
+

@@ -21,3 +21,4 @@ $friendModel = new Friend();
 $res = $friendModel->rejectRequest($requestId, $currentUser['id']);
 
 jsonResponse($res['success'], $res['message']);
+

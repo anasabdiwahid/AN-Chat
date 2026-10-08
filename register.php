@@ -44,9 +44,9 @@ if (!empty($_SESSION['user_id'])) {
             <form id="registerForm" enctype="multipart/form-data">
                 <!-- Avatar Upload -->
                 <div class="avatar-upload-box">
-                    <label for="regAvatarInput" class="avatar-upload-preview">
-                        <i class="fas fa-camera" style="font-size:24px;color:var(--primary);"></i>
-                        <img id="regAvatarPreview" alt="Profile Preview" style="display:none;">
+                    <label for="regAvatarInput" class="avatar-upload-preview" title="Click to upload profile photo">
+                        <img id="regAvatarPreview" src="assets/images/default-avatar.png" alt="Profile Preview" style="width:100%;height:100%;object-fit:cover;">
+                        <span style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.45);color:#fff;font-size:11px;padding:3px 0;text-align:center;"><i class="fas fa-camera"></i></span>
                     </label>
                     <span class="avatar-upload-hint">Upload profile photo (optional)</span>
                     <input type="file" id="regAvatarInput" name="profile_image" accept="image/jpeg,image/png,image/webp" style="display:none;">
@@ -109,3 +109,4 @@ if (!empty($_SESSION['user_id'])) {
     <script src="assets/js/pwa.js"></script>
 </body>
 </html>
+

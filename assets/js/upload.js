@@ -60,3 +60,4 @@ class FileUploader {
 }
 
 window.FileUploader = FileUploader;
+

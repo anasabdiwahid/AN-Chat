@@ -84,3 +84,4 @@ class VoiceRecorder {
 }
 
 window.VoiceRecorder = VoiceRecorder;
+

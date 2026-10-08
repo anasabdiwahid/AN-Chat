@@ -63,3 +63,4 @@ class Notification {
         return $stmt->execute([':uid' => $userId]);
     }
 }
+

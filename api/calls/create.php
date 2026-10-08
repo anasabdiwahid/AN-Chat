@@ -22,3 +22,4 @@ $callModel = new Call();
 $res = $callModel->createCall($currentUser['id'], $receiverId, $callType);
 
 jsonResponse($res['success'], $res['message'] ?? 'Call initiated', $res);
+

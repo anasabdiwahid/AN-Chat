@@ -94,7 +94,7 @@ class CallController {
             this.voiceBox.style.display = 'flex';
             document.getElementById('voiceCallPeerName').textContent = peerName;
             const imgEl = document.getElementById('voiceCallPeerAvatar');
-            if (imgEl) imgEl.src = peerImage || 'assets/images/logo.png';
+            if (imgEl) imgEl.src = peerImage || 'assets/images/default-avatar.png';
             document.getElementById('voiceCallStatusText').textContent = 'Calling...';
         } else {
             this.videoBox.style.display = 'flex';
@@ -114,7 +114,7 @@ class CallController {
         
         const avatarEl = document.getElementById('incomingCallerAvatar');
         if (avatarEl) {
-            avatarEl.src = payload.caller_image ? (payload.caller_image.startsWith('http') ? payload.caller_image : 'uploads/images/' + payload.caller_image) : 'assets/images/logo.png';
+            avatarEl.src = payload.caller_image ? (payload.caller_image.startsWith('http') ? payload.caller_image : 'uploads/images/' + payload.caller_image) : 'assets/images/default-avatar.png';
         }
 
         this.startRingtone();
@@ -235,3 +235,4 @@ class CallController {
 }
 
 window.CallController = CallController;
+

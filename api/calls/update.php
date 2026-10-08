@@ -23,3 +23,4 @@ $callModel = new Call();
 $ok = $callModel->updateCall($callId, $status, $duration);
 
 jsonResponse($ok, $ok ? 'Call status updated' : 'Failed to update call status.');
+

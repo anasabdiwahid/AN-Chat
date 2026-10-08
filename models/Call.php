@@ -95,3 +95,4 @@ class Call {
         return $stmt->fetchAll();
     }
 }
+

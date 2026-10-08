@@ -27,3 +27,4 @@ if ($targetId !== $currentUser['id']) {
 }
 
 jsonResponse(true, 'Profile retrieved', $profile);
+

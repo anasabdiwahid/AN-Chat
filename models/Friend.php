@@ -215,3 +215,4 @@ class Friend {
         return $stmt->fetchAll();
     }
 }
+

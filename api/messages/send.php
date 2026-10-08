@@ -46,3 +46,4 @@ $res = $msgModel->send(
 );
 
 jsonResponse($res['success'], $res['message'], $res['data'] ?? null);
+

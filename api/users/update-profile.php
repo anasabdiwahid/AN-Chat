@@ -82,3 +82,4 @@ if ($action === 'password') {
         jsonResponse(false, 'Failed to update profile.');
     }
 }
+

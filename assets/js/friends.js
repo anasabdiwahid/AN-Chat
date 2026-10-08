@@ -32,7 +32,7 @@ class FriendsManager {
 
             let html = '';
             data.data.forEach(u => {
-                const avatar = u.profile_image ? (u.profile_image.startsWith('http') ? u.profile_image : 'uploads/images/' + u.profile_image) : 'assets/images/logo.png';
+                const avatar = u.profile_image ? (u.profile_image.startsWith('http') ? u.profile_image : 'uploads/images/' + u.profile_image) : 'assets/images/default-avatar.png';
                 let btnHtml = '';
 
                 if (u.is_friend > 0) {
@@ -48,7 +48,7 @@ class FriendsManager {
                 html += `
                     <div class="list-item" style="cursor:default;">
                         <div class="avatar avatar-md">
-                            <img src="${avatar}" alt="${escapeHtml(u.fullname)}" onerror="this.src='assets/images/logo.png'">
+                            <img src="${avatar}" alt="${escapeHtml(u.fullname)}" onerror="this.src='assets/images/default-avatar.png'">
                             <span class="status-dot ${u.status}"></span>
                         </div>
                         <div class="list-item-content">
@@ -153,3 +153,4 @@ class FriendsManager {
 }
 
 window.FriendsManager = FriendsManager;
+

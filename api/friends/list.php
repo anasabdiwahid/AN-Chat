@@ -10,3 +10,4 @@ $friendModel = new Friend();
 $friends = $friendModel->getFriendsList($currentUser['id']);
 
 jsonResponse(true, 'Friends retrieved', $friends);
+

@@ -90,3 +90,4 @@ if (move_uploaded_file($file['tmp_name'], $targetPath)) {
 } else {
     jsonResponse(false, 'Failed to save uploaded file.');
 }
+

@@ -15,3 +15,4 @@ $userModel = new User();
 $results = $userModel->search($query, $currentUser['id']);
 
 jsonResponse(true, 'Search results', $results);
+

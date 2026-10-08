@@ -21,3 +21,4 @@ $friendModel = new Friend();
 $res = $friendModel->sendRequest($currentUser['id'], $receiverId);
 
 jsonResponse($res['success'], $res['message']);
+

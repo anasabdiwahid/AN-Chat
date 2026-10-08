@@ -17,3 +17,4 @@ $msgModel = new Message();
 $msgModel->markConversationAsRead($friendId, $currentUser['id']);
 
 jsonResponse(true, 'Messages marked as read.');
+

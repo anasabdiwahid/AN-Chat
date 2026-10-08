@@ -88,3 +88,4 @@ $registered = !empty($_GET['registered']);
     <script src="assets/js/pwa.js"></script>
 </body>
 </html>
+

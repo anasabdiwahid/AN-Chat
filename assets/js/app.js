@@ -347,7 +347,7 @@ async function loadChatsList(filterQuery = '') {
 
         let html = '';
         filtered.forEach(f => {
-            const avatar = f.profile_image ? (f.profile_image.startsWith('http') ? f.profile_image : 'uploads/images/' + f.profile_image) : 'assets/images/logo.png';
+            const avatar = f.profile_image ? (f.profile_image.startsWith('http') ? f.profile_image : 'uploads/images/' + f.profile_image) : 'assets/images/default-avatar.png';
             const unreadCount = parseInt(f.unread_count) || 0;
             const hasUnread = unreadCount > 0;
 
@@ -362,7 +362,7 @@ async function loadChatsList(filterQuery = '') {
             html += `
                 <div class="list-item ${activeClass}" id="chat-item-${f.id}" onclick="openChatWith(${f.id}, '${escapeHtml(f.fullname)}', '${escapeHtml(avatar)}', '${f.status}')">
                     <div class="avatar avatar-md">
-                        <img src="${avatar}" alt="${escapeHtml(f.fullname)}" onerror="this.src='assets/images/logo.png'">
+                        <img src="${avatar}" alt="${escapeHtml(f.fullname)}" onerror="this.src='assets/images/default-avatar.png'">
                         <span class="status-dot ${f.status}" id="status-dot-${f.id}"></span>
                     </div>
                     <div class="list-item-content">
@@ -405,11 +405,11 @@ async function loadFriendsList() {
         if (dataP.success && dataP.data && dataP.data.length > 0) {
             html += `<div style="padding:10px 18px 4px;font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;">Friend Requests (${dataP.data.length})</div>`;
             dataP.data.forEach(p => {
-                const avatar = p.profile_image ? (p.profile_image.startsWith('http') ? p.profile_image : 'uploads/images/' + p.profile_image) : 'assets/images/logo.png';
+                const avatar = p.profile_image ? (p.profile_image.startsWith('http') ? p.profile_image : 'uploads/images/' + p.profile_image) : 'assets/images/default-avatar.png';
                 html += `
                     <div class="list-item" id="req-item-${p.id}">
                         <div class="avatar avatar-md">
-                            <img src="${avatar}" alt="${escapeHtml(p.fullname)}" onerror="this.src='assets/images/logo.png'">
+                            <img src="${avatar}" alt="${escapeHtml(p.fullname)}" onerror="this.src='assets/images/default-avatar.png'">
                         </div>
                         <div class="list-item-content">
                             <div class="list-item-name">${escapeHtml(p.fullname)}</div>
@@ -428,11 +428,11 @@ async function loadFriendsList() {
         html += `<div style="padding:14px 18px 4px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;">All Friends</div>`;
         if (dataF.success && dataF.data && dataF.data.length > 0) {
             dataF.data.forEach(f => {
-                const avatar = f.profile_image ? (f.profile_image.startsWith('http') ? f.profile_image : 'uploads/images/' + f.profile_image) : 'assets/images/logo.png';
+                const avatar = f.profile_image ? (f.profile_image.startsWith('http') ? f.profile_image : 'uploads/images/' + f.profile_image) : 'assets/images/default-avatar.png';
                 html += `
                     <div class="list-item">
                         <div class="avatar avatar-md">
-                            <img src="${avatar}" alt="${escapeHtml(f.fullname)}" onerror="this.src='assets/images/logo.png'">
+                            <img src="${avatar}" alt="${escapeHtml(f.fullname)}" onerror="this.src='assets/images/default-avatar.png'">
                             <span class="status-dot ${f.status}"></span>
                         </div>
                         <div class="list-item-content">
@@ -485,7 +485,7 @@ async function loadCallsList() {
 
         let html = '';
         data.data.forEach(c => {
-            const avatar = c.other_user_image ? (c.other_user_image.startsWith('http') ? c.other_user_image : 'uploads/images/' + c.other_user_image) : 'assets/images/logo.png';
+            const avatar = c.other_user_image ? (c.other_user_image.startsWith('http') ? c.other_user_image : 'uploads/images/' + c.other_user_image) : 'assets/images/default-avatar.png';
             const isMissed = (c.status === 'missed' || c.status === 'declined');
             const isVideo = (c.call_type === 'video');
 
@@ -503,7 +503,7 @@ async function loadCallsList() {
             html += `
                 <div class="list-item">
                     <div class="avatar avatar-md">
-                        <img src="${avatar}" alt="${escapeHtml(c.other_user_name)}" onerror="this.src='assets/images/logo.png'">
+                        <img src="${avatar}" alt="${escapeHtml(c.other_user_name)}" onerror="this.src='assets/images/default-avatar.png'">
                     </div>
                     <div class="list-item-content">
                         <div class="list-item-name">${escapeHtml(c.other_user_name)}</div>
@@ -618,3 +618,4 @@ function openSettingsModal() {
     const modal = document.getElementById('settingsModal');
     if (modal) modal.classList.add('active');
 }
+

@@ -14,3 +14,4 @@ jsonResponse(true, 'Notifications loaded', [
     'notifications' => $list,
     'unread_count' => $unreadCount
 ]);
+

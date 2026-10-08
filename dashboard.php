@@ -18,7 +18,7 @@ if (!$currentUser) {
 
 $userAvatar = $currentUser['profile_image'] ? 
     (str_starts_with($currentUser['profile_image'], 'http') ? $currentUser['profile_image'] : 'uploads/images/' . $currentUser['profile_image']) : 
-    'assets/images/logo.png';
+    'assets/images/default-avatar.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -74,7 +74,7 @@ $userAvatar = $currentUser['profile_image'] ?
                 </button>
                 <button class="nav-item" data-tab="profile" title="Profile">
                     <div class="avatar avatar-sm">
-                        <img src="<?= htmlspecialchars($userAvatar) ?>" alt="<?= htmlspecialchars($currentUser['fullname']) ?>" onerror="this.src='assets/images/logo.png'">
+                        <img src="<?= htmlspecialchars($userAvatar) ?>" alt="<?= htmlspecialchars($currentUser['fullname']) ?>" onerror="this.src='assets/images/default-avatar.png'">
                     </div>
                 </button>
                 <button class="nav-item" data-tab="settings" title="Settings">
@@ -138,7 +138,7 @@ $userAvatar = $currentUser['profile_image'] ?
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         <div class="avatar avatar-md">
-                            <img id="chatHeaderAvatar" src="assets/images/logo.png" alt="Friend" onerror="this.src='assets/images/logo.png'">
+                            <img id="chatHeaderAvatar" src="assets/images/default-avatar.png" alt="Friend" onerror="this.src='assets/images/default-avatar.png'">
                         </div>
                         <div class="chat-header-info">
                             <span class="chat-header-name" id="chatHeaderName">Conversation</span>
@@ -276,7 +276,7 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- A. Incoming Call Screen -->
         <div class="incoming-call-box" id="incomingCallBox" style="display:none;">
             <div class="incoming-call-avatar">
-                <img id="incomingCallerAvatar" src="assets/images/logo.png" alt="Caller">
+                <img id="incomingCallerAvatar" src="assets/images/default-avatar.png" alt="Caller">
             </div>
             <div>
                 <div class="incoming-call-name" id="incomingCallerName">Caller Name</div>
@@ -301,7 +301,7 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- B. Active Voice Call Screen -->
         <div class="active-voice-box" id="activeVoiceBox" style="display:none;">
             <div class="incoming-call-avatar" style="width:140px;height:140px;">
-                <img id="voiceCallPeerAvatar" src="assets/images/logo.png" alt="Peer">
+                <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer">
             </div>
             <div style="font-size:24px;font-weight:700;" id="voiceCallPeerName">Anas Abdiwahid</div>
             <div class="call-timer" id="callTimerDisplay">00:00</div>
@@ -590,3 +590,4 @@ $userAvatar = $currentUser['profile_image'] ?
     <script src="assets/js/app.js"></script>
 </body>
 </html>
+

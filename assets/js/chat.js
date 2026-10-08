@@ -181,7 +181,7 @@ class ChatManager {
 
         const headerAvatar = document.getElementById('chatHeaderAvatar');
         if (headerAvatar) {
-            headerAvatar.src = friendAvatar || 'assets/images/logo.png';
+            headerAvatar.src = friendAvatar || 'assets/images/default-avatar.png';
         }
 
         // Hide Empty State and Show Active Chat UI
@@ -598,3 +598,4 @@ function formatDate(dateStr) {
 }
 
 window.ChatManager = ChatManager;
+

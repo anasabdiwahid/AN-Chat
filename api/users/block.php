@@ -26,3 +26,4 @@ if ($action === 'unblock') {
     $ok = $userModel->blockUser($currentUser['id'], $targetId);
     jsonResponse($ok, $ok ? 'User blocked successfully.' : 'Failed to block user.');
 }
+

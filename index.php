@@ -116,3 +116,4 @@ if (!empty($_SESSION['user_id'])) {
     <script src="assets/js/pwa.js"></script>
 </body>
 </html>
+

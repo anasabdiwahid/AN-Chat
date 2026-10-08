@@ -10,3 +10,4 @@ $callModel = new Call();
 $history = $callModel->getHistory($currentUser['id']);
 
 jsonResponse(true, 'Call history loaded', $history);
+

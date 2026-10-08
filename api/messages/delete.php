@@ -22,3 +22,4 @@ $msgModel = new Message();
 $res = $msgModel->deleteMessage($messageId, $currentUser['id'], $type);
 
 jsonResponse($res['success'], $res['message']);
+

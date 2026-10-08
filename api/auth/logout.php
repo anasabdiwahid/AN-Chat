@@ -27,3 +27,4 @@ if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'applicati
     header('Location: ../../login.php');
     exit;
 }
+
