@@ -450,3 +450,35 @@
     100% { transform: scale(0.9); opacity: 0.8; }
 }
 
+/* System & Screenshot Alert Notice Pill */
+.message-system-notice {
+    display: flex;
+    justify-content: center;
+    margin: 14px 0;
+    width: 100%;
+}
+
+.system-notice-pill {
+    background: var(--primary-light);
+    border: 1px solid var(--border);
+    color: var(--primary-dark);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(var(--primary-rgb), 0.08);
+    animation: fadeIn 0.3s ease;
+    max-width: 90%;
+    text-align: center;
+}
+
+.system-notice-time {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    margin-left: 4px;
+}
+
+

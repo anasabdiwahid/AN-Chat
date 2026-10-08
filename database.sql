@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `bio` VARCHAR(255) DEFAULT 'Hey there! I am using A/N Chat.',
     `status` ENUM('online','offline','away') DEFAULT 'offline',
     `last_seen` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `is_admin` TINYINT(1) DEFAULT 0,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX `idx_users_phone` (`phone`),
@@ -150,4 +151,30 @@ CREATE TABLE IF NOT EXISTS `reports` (
     CONSTRAINT `fk_report_user` FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_report_target` FOREIGN KEY (`reported_user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11. SYSTEM SETTINGS TABLE (Admin Config)
+CREATE TABLE IF NOT EXISTS `system_settings` (
+    `setting_key` VARCHAR(64) PRIMARY KEY,
+    `setting_value` TEXT NOT NULL,
+    `description` VARCHAR(255) DEFAULT NULL,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `system_settings` (`setting_key`, `setting_value`, `description`)
+VALUES ('screenshot_detection', '1', 'Enable real-time screenshot and screen recording alert in chats')
+ON DUPLICATE KEY UPDATE `setting_key`=`setting_key`;
+
+-- 12. SCREENSHOT LOGS TABLE
+CREATE TABLE IF NOT EXISTS `screenshot_logs` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT NOT NULL,
+    `target_user_id` INT NOT NULL,
+    `action_type` ENUM('screenshot', 'screen_recording') DEFAULT 'screenshot',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_slog_user` (`user_id`),
+    INDEX `idx_slog_target` (`target_user_id`),
+    CONSTRAINT `fk_slog_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_slog_target` FOREIGN KEY (`target_user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 

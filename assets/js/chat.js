@@ -324,6 +324,23 @@ class ChatManager {
         const emptyEl = this.messagesContainer.querySelector('.empty-state');
         if (emptyEl) emptyEl.remove();
 
+        // Render System / Screenshot Alert Notice Pill
+        if (msg.message_type === 'system' || msg.message_type === 'screenshot') {
+            const systemRow = document.createElement('div');
+            systemRow.className = 'message-system-notice';
+            systemRow.id = `msg-row-${msg.id || Date.now()}`;
+            systemRow.innerHTML = `
+                <div class="system-notice-pill">
+                    <i class="fas fa-camera"></i>
+                    <span>${escapeHtml(msg.message)}</span>
+                    <span class="system-notice-time">${formatTime(msg.created_at || new Date())}</span>
+                </div>
+            `;
+            this.messagesContainer.appendChild(systemRow);
+            if (shouldScroll) this.scrollToBottom();
+            return;
+        }
+
         const isMine = (parseInt(msg.sender_id) === parseInt(window.CURRENT_USER.id));
         const row = document.createElement('div');
         row.className = `message-row ${isMine ? 'mine' : 'theirs'}`;

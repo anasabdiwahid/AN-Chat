@@ -264,6 +264,33 @@ while (true) {
                 }
                 break;
 
+            case 'screenshot_alert':
+                $targetUserId = (int)($payload['target_user_id'] ?? $payload['receiver_id'] ?? 0);
+                $senderId = $clients[$sockId]['user_id'] ?? (int)($payload['sender_id'] ?? 0);
+                $senderName = $payload['sender_name'] ?? 'Friend';
+                if ($targetUserId > 0) {
+                    broadcastToUser($userSockets, $targetUserId, [
+                        'type' => 'screenshot_alert',
+                        'sender_id' => $senderId,
+                        'sender_name' => $senderName,
+                        'action_type' => $payload['action_type'] ?? 'screenshot',
+                        'notice' => $payload['notice'] ?? "⚠️ {$senderName} took a screenshot of this conversation.",
+                        'time' => date('H:i')
+                    ]);
+                    echo "[Privacy] Screenshot alert from #$senderId delivered to #$targetUserId\n";
+                }
+                break;
+
+            case 'admin_setting_update':
+                // Broadcast updated setting to all connected clients
+                broadcastToAll($clients, [
+                    'type' => 'system_setting_updated',
+                    'key' => $payload['key'] ?? '',
+                    'value' => $payload['value'] ?? ''
+                ]);
+                echo "[Admin] Setting broadcast to all clients: " . ($payload['key'] ?? '') . "\n";
+                break;
+
             case 'call_offer':
                 $targetUserId = (int)($payload['target_user_id'] ?? $payload['receiver_id'] ?? 0);
                 if ($targetUserId > 0) {

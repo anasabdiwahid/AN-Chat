@@ -131,6 +131,29 @@ class WebSocketClient {
                 }
                 break;
 
+            case 'screenshot_alert':
+                const alertNotice = data.notice || `⚠️ ${data.sender_name || 'User'} took a screenshot of this conversation.`;
+                showToast(`🚨 ${data.sender_name || 'User'} took a screenshot of your chat!`, 'warning');
+
+                if (window.chatManager) {
+                    window.chatManager.playMessagePing();
+                    if (window.chatManager.activeFriend && parseInt(window.chatManager.activeFriend.id) === parseInt(data.sender_id)) {
+                        window.chatManager.appendMessage({
+                            message_type: 'system',
+                            message: alertNotice,
+                            created_at: new Date().toISOString()
+                        }, true);
+                    }
+                }
+                break;
+
+            case 'system_setting_updated':
+                if (data.key && window.SYSTEM_SETTINGS) {
+                    window.SYSTEM_SETTINGS[data.key] = data.value;
+                    console.log(`[System Setting Updated] ${data.key} = ${data.value}`);
+                }
+                break;
+
             case 'call_offer':
                 // Incoming voice or video call
                 if (window.callController) {

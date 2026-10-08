@@ -28,6 +28,7 @@ if ($result['success']) {
     $_SESSION['phone'] = $user['phone'];
     $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['bio'] = $user['bio'];
+    $_SESSION['is_admin'] = (int)($user['is_admin'] ?? 0);
 
     jsonResponse(true, 'Login successful!', [
         'user' => $user,

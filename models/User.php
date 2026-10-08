@@ -12,7 +12,7 @@ class User {
 
     public function findById(int $id): ?array {
         $stmt = $this->db->prepare("
-            SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio, u.status, u.last_seen, u.created_at,
+            SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio, u.status, u.last_seen, u.is_admin, u.created_at,
                    s.theme, s.notification_sound, s.privacy_last_seen
             FROM users u
             LEFT JOIN user_settings s ON u.id = s.user_id
@@ -80,7 +80,8 @@ class User {
                 'fullname' => $user['fullname'],
                 'phone' => $user['phone'],
                 'profile_image' => $user['profile_image'],
-                'bio' => $user['bio']
+                'bio' => $user['bio'],
+                'is_admin' => (int)($user['is_admin'] ?? 0)
             ]
         ];
     }
@@ -214,6 +215,77 @@ class User {
             ':reason' => $reason,
             ':details' => $details
         ]);
+    }
+
+    public function getAllUsersForAdmin(string $search = ''): array {
+        $sql = "
+            SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio, u.status, u.last_seen, u.is_admin, u.created_at,
+                   (SELECT COUNT(*) FROM friendships WHERE user_id = u.id) AS friend_count,
+                   (SELECT COUNT(*) FROM messages WHERE sender_id = u.id OR receiver_id = u.id) AS message_count,
+                   (SELECT COUNT(*) FROM calls WHERE caller_id = u.id OR receiver_id = u.id) AS call_count
+            FROM users u
+        ";
+        $params = [];
+        if (!empty($search)) {
+            $sql .= " WHERE u.fullname LIKE :q1 OR u.phone LIKE :q2";
+            $params[':q1'] = "%$search%";
+            $params[':q2'] = "%$search%";
+        }
+        $sql .= " ORDER BY u.created_at DESC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getAllFriendshipsForAdmin(string $search = ''): array {
+        // Friendships are bidirectional pairs (user_id < friend_id ensures unique friendship display)
+        $sql = "
+            SELECT f.id, f.created_at,
+                   u1.id AS user1_id, u1.fullname AS user1_name, u1.phone AS user1_phone, u1.profile_image AS user1_avatar, u1.status AS user1_status,
+                   u2.id AS user2_id, u2.fullname AS user2_name, u2.phone AS user2_phone, u2.profile_image AS user2_avatar, u2.status AS user2_status,
+                   (SELECT COUNT(*) FROM messages WHERE (sender_id = u1.id AND receiver_id = u2.id) OR (sender_id = u2.id AND receiver_id = u1.id)) AS shared_messages
+            FROM friendships f
+            JOIN users u1 ON f.user_id = u1.id
+            JOIN users u2 ON f.friend_id = u2.id
+            WHERE f.user_id < f.friend_id
+        ";
+        $params = [];
+        if (!empty($search)) {
+            $sql .= " AND (u1.fullname LIKE :q1 OR u1.phone LIKE :q2 OR u2.fullname LIKE :q3 OR u2.phone LIKE :q4)";
+            $params[':q1'] = "%$search%";
+            $params[':q2'] = "%$search%";
+            $params[':q3'] = "%$search%";
+            $params[':q4'] = "%$search%";
+        }
+        $sql .= " ORDER BY f.created_at DESC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function toggleAdminStatus(int $userId, int $isAdmin): bool {
+        $stmt = $this->db->prepare("UPDATE users SET is_admin = :adm WHERE id = :id");
+        return $stmt->execute([':adm' => $isAdmin ? 1 : 0, ':id' => $userId]);
+    }
+
+    public function getAdminStats(): array {
+        $totalUsers = (int)$this->db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        $onlineUsers = (int)$this->db->query("SELECT COUNT(*) FROM users WHERE status = 'online'")->fetchColumn();
+        $totalFriendships = (int)$this->db->query("SELECT COUNT(*) FROM friendships WHERE user_id < friend_id")->fetchColumn();
+        $totalMessages = (int)$this->db->query("SELECT COUNT(*) FROM messages")->fetchColumn();
+        $totalCalls = (int)$this->db->query("SELECT COUNT(*) FROM calls")->fetchColumn();
+        $totalReports = (int)$this->db->query("SELECT COUNT(*) FROM reports")->fetchColumn();
+        $totalScreenshots = (int)$this->db->query("SELECT COUNT(*) FROM screenshot_logs")->fetchColumn();
+
+        return [
+            'total_users' => $totalUsers,
+            'online_users' => $onlineUsers,
+            'total_friendships' => $totalFriendships,
+            'total_messages' => $totalMessages,
+            'total_calls' => $totalCalls,
+            'total_reports' => $totalReports,
+            'total_screenshots' => $totalScreenshots
+        ];
     }
 }
 

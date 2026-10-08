@@ -88,8 +88,21 @@ function requireAuth(): array {
         'id' => (int)$_SESSION['user_id'],
         'fullname' => $_SESSION['fullname'] ?? '',
         'phone' => $_SESSION['phone'] ?? '',
-        'profile_image' => $_SESSION['profile_image'] ?? null
+        'profile_image' => $_SESSION['profile_image'] ?? null,
+        'is_admin' => (int)($_SESSION['is_admin'] ?? 0)
     ];
+}
+
+// Admin Authorization Check Helper
+function requireAdmin(): array {
+    $user = requireAuth();
+    require_once __DIR__ . '/../models/User.php';
+    $userModel = new User();
+    $userData = $userModel->findById($user['id']);
+    if (!$userData || empty($userData['is_admin'])) {
+        jsonResponse(false, 'Forbidden. Admin privileges required.', null, 403);
+    }
+    return $userData;
 }
 
 // CSRF Token Helper

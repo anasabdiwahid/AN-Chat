@@ -2,6 +2,7 @@
 // dashboard.php - Main Application Dashboard
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/models/User.php';
+require_once __DIR__ . '/models/SystemSetting.php';
 
 if (empty($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -15,6 +16,9 @@ if (!$currentUser) {
     header('Location: logout.php');
     exit;
 }
+
+$settingModel = new SystemSetting();
+$screenshotSetting = $settingModel->get('screenshot_detection', '1');
 
 $userAvatar = $currentUser['profile_image'] ? 
     (str_starts_with($currentUser['profile_image'], 'http') || str_starts_with($currentUser['profile_image'], 'assets/') || str_starts_with($currentUser['profile_image'], 'uploads/')
@@ -83,6 +87,11 @@ $userAvatar = $currentUser['profile_image'] ?
                 <button class="nav-item" data-tab="settings" title="Settings">
                     <i class="fas fa-cog"></i>
                 </button>
+                <?php if (!empty($currentUser['is_admin'])): ?>
+                <a href="admin.php" class="nav-item" title="Admin Portal" style="color:var(--primary);">
+                    <i class="fas fa-shield-alt"></i>
+                </a>
+                <?php endif; ?>
                 <a href="logout.php" class="nav-item" title="Logout" style="color:var(--danger);">
                     <i class="fas fa-sign-out-alt"></i>
                 </a>
@@ -543,8 +552,13 @@ $userAvatar = $currentUser['profile_image'] ?
             'fullname' => $currentUser['fullname'],
             'phone' => $currentUser['phone'],
             'profile_image' => $userAvatar,
+            'is_admin' => (int)($currentUser['is_admin'] ?? 0),
             'theme' => $currentUser['theme'] ?? 'light'
         ], JSON_UNESCAPED_SLASHES) ?>;
+
+        window.SYSTEM_SETTINGS = {
+            screenshot_detection: <?= json_encode($screenshotSetting) ?>
+        };
 
         function toggleEmojiPicker(btn) {
             const p = document.getElementById('emojiPickerPopover');
@@ -610,6 +624,7 @@ $userAvatar = $currentUser['profile_image'] ?
     <script src="assets/js/friends.js"></script>
     <script src="assets/js/notifications.js"></script>
     <script src="assets/js/chat.js"></script>
+    <script src="assets/js/privacy-shield.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 </html>
