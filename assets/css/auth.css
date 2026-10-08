@@ -46,7 +46,7 @@
     width: 68px;
     height: 68px;
     border-radius: 20px;
-    border: 3px solid var(--primary-light);
+    border: 3px solid #ffffff;
     box-shadow: 0 4px 16px rgba(var(--primary-rgb), 0.2);
     object-fit: cover;
     margin-bottom: 12px;

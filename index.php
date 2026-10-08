@@ -33,7 +33,7 @@ if (!empty($_SESSION['user_id'])) {
     <!-- Header -->
     <header class="landing-header">
         <div style="display:flex;align-items:center;gap:12px;">
-            <img src="assets/images/logo.png" alt="A/N Chat Logo" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);">
+            <img src="assets/images/logo.png" alt="A/N Chat Logo" style="width:40px;height:40px;border-radius:12px;object-fit:cover;border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
             <div style="font-size:20px;font-weight:800;color:var(--primary);letter-spacing:-0.5px;">A/N Chat</div>
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
