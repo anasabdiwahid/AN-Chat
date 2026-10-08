@@ -14,3 +14,4 @@ $stats = $userModel->getAdminStats();
 $stats['screenshot_detection'] = $settingModel->isScreenshotDetectionEnabled();
 
 jsonResponse(true, 'Admin stats loaded', $stats);
+

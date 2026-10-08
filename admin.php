@@ -281,3 +281,4 @@ $adminAvatar = $currentAdmin['profile_image'] ?
     <script src="assets/js/admin.js"></script>
 </body>
 </html>
+

@@ -24,3 +24,4 @@ foreach ($friendships as &$f) {
 }
 
 jsonResponse(true, 'Friendships loaded', $friendships);
+

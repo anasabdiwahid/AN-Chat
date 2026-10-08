@@ -65,3 +65,4 @@ jsonResponse(true, 'Screenshot alert recorded', [
     'notice' => $systemNotice,
     'created_at' => date('Y-m-d H:i:s')
 ]);
+

@@ -177,4 +177,11 @@ CREATE TABLE IF NOT EXISTS `screenshot_logs` (
     CONSTRAINT `fk_slog_target` FOREIGN KEY (`target_user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 13. DEFAULT SYSTEM ADMIN ACCOUNT
+-- Phone: 613496943 | Password: yDnSl700
+INSERT INTO `users` (`fullname`, `phone`, `password`, `profile_image`, `bio`, `status`, `is_admin`, `created_at`)
+VALUES ('A/N Admin', '613496943', '$2y$10$mnA8qmRMfgmLqgnCl7iBMeGEpU3L9w7Q47FQ7AXNtRt786Xi1sGj2', 'assets/images/logo.png', 'System Administrator — A/N Chat', 'offline', 1, NOW())
+ON DUPLICATE KEY UPDATE `is_admin` = 1;
+
+
 

@@ -38,3 +38,4 @@ if ($feature === 'screenshot_detection') {
 } else {
     jsonResponse(false, 'Unknown feature key.');
 }
+

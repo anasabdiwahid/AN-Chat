@@ -22,3 +22,4 @@ foreach ($users as &$u) {
 }
 
 jsonResponse(true, 'Users loaded', $users);
+

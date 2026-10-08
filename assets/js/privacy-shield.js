@@ -135,3 +135,4 @@ class PrivacyShield {
 document.addEventListener('DOMContentLoaded', () => {
     window.privacyShield = new PrivacyShield();
 });
+

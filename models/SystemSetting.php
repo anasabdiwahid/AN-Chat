@@ -71,3 +71,4 @@ class SystemSetting {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
+

@@ -22,3 +22,4 @@ foreach ($logs as &$l) {
 }
 
 jsonResponse(true, 'Screenshot logs loaded', $logs);
+

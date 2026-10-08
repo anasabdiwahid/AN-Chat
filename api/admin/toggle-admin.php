@@ -31,3 +31,4 @@ if ($ok) {
 } else {
     jsonResponse(false, 'Failed to update admin role.');
 }
+
