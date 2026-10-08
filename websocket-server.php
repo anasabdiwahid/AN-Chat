@@ -264,8 +264,36 @@ while (true) {
                 }
                 break;
 
-            case 'webrtc_signal':
             case 'call_offer':
+                $targetUserId = (int)($payload['target_user_id'] ?? $payload['receiver_id'] ?? 0);
+                if ($targetUserId > 0) {
+                    $callerId = $clients[$sockId]['user_id'] ?? ($payload['caller_id'] ?? 0);
+                    $payload['from_user_id'] = $callerId;
+
+                    if (!empty($userSockets[$targetUserId])) {
+                        // User is online on network -> deliver offer
+                        broadcastToUser($userSockets, $targetUserId, $payload);
+                        echo "[Signaling] call_offer delivered from #$callerId to #$targetUserId (Ringing)\n";
+
+                        // Notify caller that receiver device is ringing
+                        sendWebSocketFrame($clientSocket, json_encode([
+                            'type' => 'call_status',
+                            'status' => 'ringing',
+                            'target_user_id' => $targetUserId
+                        ]));
+                    } else {
+                        // User is not connected to WebSocket network
+                        echo "[Signaling] User #$targetUserId is offline for call from #$callerId\n";
+                        sendWebSocketFrame($clientSocket, json_encode([
+                            'type' => 'call_status',
+                            'status' => 'offline',
+                            'target_user_id' => $targetUserId
+                        ]));
+                    }
+                }
+                break;
+
+            case 'webrtc_signal':
             case 'call_answer':
             case 'call_ice':
             case 'call_status':

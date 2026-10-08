@@ -304,8 +304,8 @@ $userAvatar = $currentUser['profile_image'] ?
                 <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer">
             </div>
             <div style="font-size:24px;font-weight:700;" id="voiceCallPeerName">Anas Abdiwahid</div>
-            <div class="call-timer" id="callTimerDisplay">00:00</div>
-            <div style="font-size:13px;color:rgba(255,255,255,0.7);" id="voiceCallStatusText">Connected</div>
+            <div class="call-timer" id="callTimerDisplay" style="display:none;">00:00</div>
+            <div style="font-size:15px;color:rgba(255,255,255,0.85);font-weight:600;" id="voiceCallStatusText">Calling...</div>
 
             <div class="active-call-controls">
                 <button class="control-btn" id="btnToggleVoiceMute" title="Mute Microphone">

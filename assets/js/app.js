@@ -115,6 +115,14 @@ class WebSocketClient {
                 if (window.callController) {
                     window.callController.showIncomingCall(data);
                 }
+                // Acknowledge to caller that this device received the call and is ringing
+                if (data.from_user_id) {
+                    this.send({
+                        type: 'call_status',
+                        target_user_id: data.from_user_id,
+                        status: 'ringing'
+                    });
+                }
                 break;
 
             case 'call_answer':
@@ -122,6 +130,8 @@ class WebSocketClient {
                     window.webrtc.handleIncomingAnswer(data);
                     if (window.callController) {
                         window.callController.showActiveCallScreen(window.webrtc.callType);
+                        // Start the call timer ONLY after recipient answers and conversation begins
+                        window.callController.startCallTimer();
                     }
                 }
                 break;
@@ -133,7 +143,15 @@ class WebSocketClient {
                 break;
 
             case 'call_status':
-                if (data.status === 'declined' || data.status === 'ended') {
+                if (data.status === 'ringing') {
+                    if (window.callController) {
+                        window.callController.setStatusRinging();
+                    }
+                } else if (data.status === 'offline') {
+                    if (window.callController) {
+                        window.callController.setStatusOffline();
+                    }
+                } else if (data.status === 'declined' || data.status === 'ended') {
                     if (window.callController) {
                         window.callController.hideCallOverlay();
                         window.callController.playCallEndTone();
