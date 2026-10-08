@@ -113,6 +113,14 @@ if (!empty($_SESSION['user_id'])) {
         <p>&copy; <?= date('Y') ?> <strong>A/N Chat</strong>. Connect. Chat. Call. Share. All rights reserved.</p>
     </footer>
 
+    <!-- Floating Bouncing PWA Install Button -->
+    <div id="pwaFloatingInstallContainer" class="pwa-floating-install-container" style="display:none;">
+        <button id="pwaFloatingInstallBtn" class="pwa-bouncing-btn" title="Install A/N Chat on your device" aria-label="Install App">
+            <i class="fas fa-download"></i>
+            <span>Install App</span>
+        </button>
+    </div>
+
     <!-- PWA Script -->
     <script src="assets/js/pwa.js"></script>
 </body>

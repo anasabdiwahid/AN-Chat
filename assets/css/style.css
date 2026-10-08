@@ -383,3 +383,101 @@
     to { transform: rotate(360deg); }
 }
 
+/* ========================================================== */
+/* PWA Floating Bouncing Install Button ("oo bod bodeyso")     */
+/* ========================================================== */
+.pwa-floating-install-container {
+    position: fixed;
+    bottom: 76px;
+    right: 18px;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.pwa-bouncing-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #E91E63 0%, #D81B60 50%, #C2185B 100%);
+    color: #ffffff !important;
+    border: 2.5px solid #ffffff;
+    border-radius: 50px;
+    padding: 11px 20px;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(233, 30, 99, 0.5), 0 2px 6px rgba(0, 0, 0, 0.2);
+    animation: pwaBounceActive 1.6s infinite ease-in-out;
+    transform-origin: center bottom;
+    text-decoration: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.pwa-bouncing-btn:hover {
+    background: linear-gradient(135deg, #FF4081 0%, #E91E63 100%);
+    box-shadow: 0 12px 28px rgba(233, 30, 99, 0.65), 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+.pwa-bouncing-btn:active {
+    transform: scale(0.96);
+}
+
+.pwa-bouncing-btn i {
+    font-size: 15px;
+    animation: pwaIconBob 1.6s infinite ease-in-out;
+}
+
+/* Continuous Up-and-Down Bouncing Animation ("oo bod bodeyso") */
+@keyframes pwaBounceActive {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 6px 18px rgba(233, 30, 99, 0.45), 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+    30% {
+        transform: translateY(-14px) scale(1.04);
+        box-shadow: 0 18px 30px rgba(233, 30, 99, 0.6), 0 6px 12px rgba(0, 0, 0, 0.2);
+    }
+    50% {
+        transform: translateY(0) scale(0.98);
+        box-shadow: 0 6px 16px rgba(233, 30, 99, 0.4), 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+    70% {
+        transform: translateY(-7px) scale(1.02);
+        box-shadow: 0 12px 22px rgba(233, 30, 99, 0.55), 0 4px 8px rgba(0, 0, 0, 0.18);
+    }
+}
+
+@keyframes pwaIconBob {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    30% {
+        transform: translateY(-2px);
+    }
+    70% {
+        transform: translateY(-1px);
+    }
+}
+
+/* Hide on mobile when active chat is open so it doesn't block inputs */
+@media (max-width: 767px) {
+    .app-container.chat-open .pwa-floating-install-container {
+        display: none !important;
+    }
+}
+
+/* Desktop layout adjustment */
+@media (min-width: 768px) {
+    .pwa-floating-install-container {
+        bottom: 24px;
+        right: 24px;
+    }
+}
+
+

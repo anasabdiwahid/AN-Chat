@@ -279,6 +279,14 @@ $userAvatar = $currentUser['profile_image'] ?
                 <span>Profile</span>
             </button>
         </nav>
+
+        <!-- Floating Bouncing PWA Install Button -->
+        <div id="pwaFloatingInstallContainer" class="pwa-floating-install-container" style="display:none;">
+            <button id="pwaFloatingInstallBtn" class="pwa-bouncing-btn" title="Install A/N Chat on your device" aria-label="Install App">
+                <i class="fas fa-download"></i>
+                <span>Install App</span>
+            </button>
+        </div>
     </div>
 
     <!-- ============================================== -->
