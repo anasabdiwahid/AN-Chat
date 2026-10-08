@@ -1,5 +1,5 @@
 // pwa/service-worker.js - A/N Chat Service Worker
-const CACHE_NAME = 'an-chat-cache-v4';
+const CACHE_NAME = 'an-chat-cache-v5';
 
 const STATIC_ASSETS = [
     '../assets/css/variables.css',

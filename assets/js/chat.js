@@ -11,6 +11,7 @@ class ChatManager {
         this.typingTimeout = null;
         this.isTyping = false;
         this.audioPingCtx = null;
+        this.highestMessageId = 0;
 
         this.initEvents();
     }
@@ -196,6 +197,7 @@ class ChatManager {
         if (appContainer) appContainer.classList.add('chat-open');
 
         // Load conversation messages
+        this.highestMessageId = 0;
         await this.loadMessages(friendId);
 
         // Notify WebSocket that messages are read
@@ -227,7 +229,12 @@ class ChatManager {
             }
 
             this.messagesContainer.innerHTML = '';
+            this.highestMessageId = 0;
             data.data.forEach(msg => {
+                const mid = parseInt(msg.id);
+                if (mid && mid > this.highestMessageId) {
+                    this.highestMessageId = mid;
+                }
                 this.appendMessage(msg, false);
             });
 
@@ -319,6 +326,16 @@ class ChatManager {
 
     appendMessage(msg, shouldScroll = true) {
         if (!this.messagesContainer) return;
+
+        // Prevent duplicate rendering
+        if (msg.id && document.getElementById(`msg-row-${msg.id}`)) {
+            return;
+        }
+
+        const mid = parseInt(msg.id);
+        if (mid && mid > this.highestMessageId) {
+            this.highestMessageId = mid;
+        }
 
         // Remove empty state if present
         const emptyEl = this.messagesContainer.querySelector('.empty-state');
@@ -600,6 +617,35 @@ class ChatManager {
             osc.start(now);
             osc.stop(now + 0.25);
         } catch (e) {}
+    }
+
+    updateReadStatus(readIds) {
+        if (!Array.isArray(readIds) || readIds.length === 0) return;
+        readIds.forEach(id => {
+            const row = document.getElementById(`msg-row-${id}`);
+            if (row && row.classList.contains('mine')) {
+                const ticks = row.querySelector('.bubble-ticks');
+                if (ticks && !ticks.classList.contains('read')) {
+                    ticks.textContent = '✓✓';
+                    ticks.classList.add('read');
+                }
+            }
+        });
+    }
+
+    updateDeletedMessages(deletedIds) {
+        if (!Array.isArray(deletedIds) || deletedIds.length === 0) return;
+        deletedIds.forEach(id => {
+            const row = document.getElementById(`msg-row-${id}`);
+            if (row) {
+                const textEl = row.querySelector('.bubble-text');
+                if (textEl && !textEl.innerHTML.includes('deleted')) {
+                    textEl.innerHTML = '<em style="color:var(--text-secondary);font-size:12.5px;">This message was deleted</em>';
+                    const media = row.querySelector('.bubble-media');
+                    if (media) media.remove();
+                }
+            }
+        });
     }
 }
 
