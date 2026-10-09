@@ -477,7 +477,9 @@ async function checkForIncomingCall() {
             console.warn('[Call] Incoming-call endpoint returned HTTP', response.status);
             return;
         }
-        const result = await response.json();
+        const text = await response.text();
+        if (!text || !text.trim()) return;
+        const result = JSON.parse(text);
         if (!result.success) {
             console.warn('[Call] Incoming-call endpoint error:', result.message || 'Unknown error');
             return;
@@ -537,8 +539,11 @@ async function pollIncomingCallOffer() {
         const response = await fetch(`api/calls/signal.php?call_id=${callId}&after_id=${afterId}`, {
             cache: 'no-store', credentials: 'same-origin'
         });
-        const result = await response.json();
-        if (!response.ok || !result.success || !Array.isArray(result.data)) return;
+        if (!response.ok) return;
+        const text = await response.text();
+        if (!text || !text.trim()) return;
+        const result = JSON.parse(text);
+        if (!result || !result.success || !Array.isArray(result.data)) return;
         for (const signal of result.data) {
             incomingSignalOffsets[callId] = Math.max(incomingSignalOffsets[callId] || 0, parseInt(signal.id) || 0);
             if (signal.signal_type === 'offer' && parseInt(signal.from_user_id) === parseInt(call.from_user_id || call.caller_id)) {

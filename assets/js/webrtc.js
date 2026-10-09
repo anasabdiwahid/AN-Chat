@@ -165,17 +165,22 @@ class WebRTCManager {
     }
 
     async sendCallSignal(signalType, payload) {
-        if (!this.currentCallId) throw new Error('Call ID is missing for signaling.');
-        const response = await fetch('api/calls/signal.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ call_id: this.currentCallId, signal_type: signalType, payload })
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.message || 'Call signal could not be delivered.');
+        if (!this.currentCallId) return null;
+        try {
+            const response = await fetch('api/calls/signal.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ call_id: this.currentCallId, signal_type: signalType, payload })
+            });
+            if (!response.ok) return null;
+            const text = await response.text();
+            if (!text || !text.trim()) return null;
+            const result = JSON.parse(text);
+            return result && result.data ? result.data : null;
+        } catch (e) {
+            console.warn('[WebRTC] sendCallSignal network warning:', e);
+            return null;
         }
-        return result.data;
     }
 
     startSignalPolling(callId) {
@@ -188,8 +193,11 @@ class WebRTCManager {
                 const response = await fetch(`api/calls/signal.php?call_id=${encodeURIComponent(callId)}&after_id=${this.lastSignalId}`, {
                     cache: 'no-store', credentials: 'same-origin'
                 });
-                const result = await response.json();
-                if (!response.ok || !result.success || !Array.isArray(result.data)) return;
+                if (!response.ok) return;
+                const text = await response.text();
+                if (!text || !text.trim()) return;
+                const result = JSON.parse(text);
+                if (!result || !result.success || !Array.isArray(result.data)) return;
                 for (const signal of result.data) {
                     this.lastSignalId = Math.max(this.lastSignalId, parseInt(signal.id) || 0);
                     if (signal.signal_type === 'answer') await this.handleIncomingAnswer(signal.payload || {});

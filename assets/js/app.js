@@ -1061,11 +1061,12 @@ function sendPresenceHeartbeat(keepalive = false) {
         cache: 'no-store',
         signal: controller.signal,
         keepalive
-    }).then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
+    }).then(async response => {
+        if (!response.ok) return null;
+        const text = await response.text();
+        return text ? JSON.parse(text) : null;
     }).then(result => {
-        if (!result || !result.success) throw new Error((result && result.message) || 'Heartbeat rejected');
+        if (!result || !result.success) return;
         const friends = result.data && Array.isArray(result.data.friends) ? result.data.friends : [];
         friends.forEach(friend => updateUserStatusInUI(friend.id, friend.status, friend.last_seen));
     }).catch(error => {

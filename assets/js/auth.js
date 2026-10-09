@@ -151,6 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Global Toast Display Helper
 function showToast(message, type = 'info', onClick = null) {
+    if (!message) return;
+    if (typeof message === 'string' && (message.includes('JSON') || message.includes('SyntaxError') || message.includes('Unexpected end of JSON'))) {
+        message = 'Cillad xiriirka ah, fadlan dib u cusboonaysii.';
+    }
+
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
