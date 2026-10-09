@@ -586,14 +586,17 @@ $userAvatar = $currentUser['profile_image'] ?
 
                 <!-- Voice Recording Bar Overlay -->
                 <div class="recording-bar" id="recordingBar">
-                    <div class="recording-indicator">
+                    <div class="recording-indicator" id="recordingIndicator">
                         <div class="recording-dot"></div>
                         <span>Recording <span id="recordingTimer">00:00</span></span>
                     </div>
                     <div class="recording-waveform" id="recordingWaveform" role="img" aria-label="Live audio level"></div>
+                    <div class="recording-preview" id="recordingPreview" hidden>
+                        <audio id="recordingPreviewAudio" controls preload="metadata"></audio>
+                    </div>
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-outline btn-sm" id="btnCancelRecord"><i class="fas fa-trash"></i> Cancel</button>
-                        <button class="btn btn-primary btn-sm" id="btnSendRecord"><i class="fas fa-paper-plane"></i> Send Audio</button>
+                        <button class="btn btn-primary btn-sm" id="btnSendRecord"><i class="fas fa-stop"></i> Finish &amp; Listen</button>
                     </div>
                 </div>
 

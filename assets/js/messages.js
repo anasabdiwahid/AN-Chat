@@ -143,6 +143,8 @@ class ChatManager {
         } catch (e) {
             this.recorder = null;
         }
+        this.pendingVoiceBlob = null;
+        this.voicePreviewUrl = null;
 
         if (voiceBtn) {
             voiceBtn.addEventListener('click', async () => {
@@ -164,6 +166,7 @@ class ChatManager {
         if (cancelRecordBtn) {
             cancelRecordBtn.addEventListener('click', () => {
                 if (this.recorder) this.recorder.cancel();
+                this.clearVoicePreview();
                 showToast('Voice message cancelled.', 'info');
             });
         }
@@ -171,17 +174,66 @@ class ChatManager {
         if (sendRecordBtn) {
             sendRecordBtn.addEventListener('click', async () => {
                 if (!this.recorder) return;
-                const audioBlob = await this.recorder.stop();
-                if (audioBlob) {
-                    showToast('Sending voice message...', 'info');
-                    const audioFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+
+                if (this.recorder.isRecording) {
+                    const audioBlob = await this.recorder.stop();
+                    if (!audioBlob) return;
+                    this.pendingVoiceBlob = audioBlob;
+                    this.voicePreviewUrl = URL.createObjectURL(audioBlob);
+                    const preview = document.getElementById('recordingPreview');
+                    const previewAudio = document.getElementById('recordingPreviewAudio');
+                    const recordingBar = document.getElementById('recordingBar');
+                    const indicator = document.getElementById('recordingIndicator');
+                    if (previewAudio) previewAudio.src = this.voicePreviewUrl;
+                    if (preview) preview.hidden = false;
+                    if (recordingBar) recordingBar.classList.add('previewing', 'active');
+                    if (indicator) indicator.innerHTML = '<i class="fas fa-headphones"></i><span>Listen before sending</span>';
+                    sendRecordBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Audio';
+                    showToast('Dhageyso codka; kadib dooro Send ama Cancel.', 'info');
+                    return;
+                }
+
+                if (!this.pendingVoiceBlob) return;
+                sendRecordBtn.disabled = true;
+                showToast('Sending voice message...', 'info');
+                const mimeType = this.pendingVoiceBlob.type || 'audio/webm';
+                const extension = mimeType.includes('mp4') ? 'm4a' : (mimeType.includes('ogg') ? 'ogg' : 'webm');
+                const audioFile = new File([this.pendingVoiceBlob], `voice_${Date.now()}.${extension}`, { type: mimeType });
+                try {
                     const uploadRes = await FileUploader.upload(audioFile, 'voice');
                     if (uploadRes) {
                         this.sendMediaMessage('voice', uploadRes.file_path, uploadRes.file_name, uploadRes.file_size);
+                        this.recorder.cancel();
+                        this.clearVoicePreview();
                     }
+                } catch (error) {
+                    console.error('[Voice message upload failed]', error);
+                    showToast('Codka lama diri karin. Mar kale isku day.', 'error');
+                } finally {
+                    sendRecordBtn.disabled = false;
                 }
             });
         }
+    }
+
+    clearVoicePreview() {
+        const previewAudio = document.getElementById('recordingPreviewAudio');
+        const preview = document.getElementById('recordingPreview');
+        const recordingBar = document.getElementById('recordingBar');
+        const indicator = document.getElementById('recordingIndicator');
+        const sendButton = document.getElementById('btnSendRecord');
+        if (previewAudio) {
+            previewAudio.pause();
+            previewAudio.removeAttribute('src');
+            previewAudio.load();
+        }
+        if (this.voicePreviewUrl) URL.revokeObjectURL(this.voicePreviewUrl);
+        this.voicePreviewUrl = null;
+        this.pendingVoiceBlob = null;
+        if (preview) preview.hidden = true;
+        if (recordingBar) recordingBar.classList.remove('previewing');
+        if (indicator) indicator.innerHTML = '<div class="recording-dot"></div><span>Recording <span id="recordingTimer">00:00</span></span>';
+        if (sendButton) sendButton.innerHTML = '<i class="fas fa-stop"></i> Finish &amp; Listen';
     }
 
     async openConversation(friendId, friendName, friendAvatar, friendStatus) {
