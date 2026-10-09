@@ -44,7 +44,19 @@ class FriendsManager {
                 const safeStatus = (u.status || 'offline').replace(/'/g, "\\'");
 
                 if (u.is_friend > 0) {
-                    btnHtml = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openChatWith(${userId}, '${safeName}', '${safeAvatar}', '${safeStatus}');"><i class="fas fa-comment"></i> Chat</button>`;
+                    btnHtml = `
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <button class="btn-icon btn-sm" title="Voice call" style="color:var(--primary);" onclick="event.stopPropagation(); if (typeof window.startCallWith === 'function') window.startCallWith(${userId}, '${safeName}', '${safeAvatar}', 'voice');">
+                                <i class="fas fa-phone-alt"></i>
+                            </button>
+                            <button class="btn-icon btn-sm" title="Video call" style="color:var(--primary);" onclick="event.stopPropagation(); if (typeof window.startCallWith === 'function') window.startCallWith(${userId}, '${safeName}', '${safeAvatar}', 'video');">
+                                <i class="fas fa-video"></i>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openChatWith(${userId}, '${safeName}', '${safeAvatar}', '${safeStatus}');">
+                                <i class="fas fa-comment"></i> Chat
+                            </button>
+                        </div>
+                    `;
                 } else if (u.sent_req_status === 'pending') {
                     btnHtml = `<button class="btn btn-outline btn-sm" disabled><i class="fas fa-clock"></i> Requested</button>`;
                 } else if (u.recv_req_status === 'pending') {

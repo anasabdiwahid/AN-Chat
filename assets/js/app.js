@@ -644,7 +644,13 @@ async function loadFriendsList() {
                             <div class="list-item-name">${escapeHtml(f.fullname)}</div>
                             <div class="list-item-preview"><i class="fas fa-phone-alt" style="font-size:11px;margin-right:4px;"></i>${escapeHtml(f.phone)}</div>
                         </div>
-                        <div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <button class="btn-icon btn-sm" title="Voice call" style="color:var(--primary);" onclick="event.stopPropagation(); if (typeof window.startCallWith === 'function') window.startCallWith(${friendId}, '${safeFName}', '${safeFAvatar}', 'voice');">
+                                <i class="fas fa-phone-alt"></i>
+                            </button>
+                            <button class="btn-icon btn-sm" title="Video call" style="color:var(--primary);" onclick="event.stopPropagation(); if (typeof window.startCallWith === 'function') window.startCallWith(${friendId}, '${safeFName}', '${safeFAvatar}', 'video');">
+                                <i class="fas fa-video"></i>
+                            </button>
                             <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openChatWith(${friendId}, '${safeFName}', '${safeFAvatar}', '${safeFStatus}');">
                                 <i class="fas fa-comment"></i> Chat
                             </button>
@@ -705,8 +711,12 @@ async function loadCallsList() {
                 durationText = ` • ${mins}m ${secs}s`;
             }
 
+            const otherId = parseInt(c.other_user_id);
+            const safeCName = escapeHtml(c.other_user_name).replace(/'/g, "\\'");
+            const safeCAvatar = avatar.replace(/'/g, "\\'");
+
             html += `
-                <div class="list-item">
+                <div class="list-item" onclick="openChatWith(${otherId}, '${safeCName}', '${safeCAvatar}', 'offline')" style="cursor:pointer;">
                     <div class="avatar avatar-md">
                         <img src="${avatar}" alt="${escapeHtml(c.other_user_name)}" onerror="this.src='assets/images/default-avatar.png'">
                     </div>
@@ -719,8 +729,13 @@ async function loadCallsList() {
                             ${directionText} ${c.call_type} call ${durationText}
                         </div>
                     </div>
-                    <div style="font-size:11px;color:var(--text-muted);text-align:right;">
-                        ${formatDate(c.created_at)}
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="font-size:11px;color:var(--text-muted);text-align:right;">
+                            ${formatDate(c.created_at)}
+                        </div>
+                        <button class="btn-icon btn-sm" title="Redial (${c.call_type})" style="color:var(--primary);" onclick="event.stopPropagation(); if (typeof window.startCallWith === 'function') window.startCallWith(${otherId}, '${safeCName}', '${safeCAvatar}', '${c.call_type || 'voice'}');">
+                            <i class="fas ${isVideo ? 'fa-video' : 'fa-phone-alt'}"></i>
+                        </button>
                     </div>
                 </div>
             `;

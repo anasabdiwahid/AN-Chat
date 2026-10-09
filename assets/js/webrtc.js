@@ -25,9 +25,10 @@ class WebRTCManager {
     }
 
     sendWs(data) {
-        if (this.ws && typeof this.ws.send === 'function') {
+        const client = (this.ws && typeof this.ws.send === 'function') ? this.ws : (window.wsClient || null);
+        if (client && typeof client.send === 'function') {
             try {
-                this.ws.send(data);
+                client.send(data);
             } catch (e) {
                 console.warn('[WebRTC] WS send error:', e);
             }
@@ -76,26 +77,20 @@ class WebRTCManager {
             }
         }, 35000);
 
-        // 2. Check media devices support (requires HTTPS or localhost in modern browsers)
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            console.warn('[WebRTC] getUserMedia not supported in insecure context (requires HTTPS or localhost)');
-            if (typeof showToast === 'function') {
-                showToast('Wicitaanka codka/muuqaalka wuxuu u baahan yahay HTTPS ama fasaxa microphone-ka.', 'warning');
-            }
-            return true;
-        }
+        // 2. Check media devices support
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const constraints = {
+                audio: true,
+                video: callType === 'video'
+            };
 
-        const constraints = {
-            audio: true,
-            video: callType === 'video'
-        };
-
-        try {
-            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-            console.warn('getUserMedia warning:', err);
-            if (typeof showToast === 'function') {
-                showToast('Fadlan ogolow Microphone/Camera-ka browser-ka si aad u wacdo.', 'warning');
+            try {
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                console.warn('getUserMedia warning:', err);
+                if (typeof showToast === 'function') {
+                    showToast('Fadlan ogolow Microphone/Camera-ka browser-ka si aad u wacdo.', 'warning');
+                }
             }
         }
 
@@ -106,26 +101,27 @@ class WebRTCManager {
         }
 
         // 3. Initialize RTCPeerConnection if available
+        let offer = null;
         try {
             if (window.RTCPeerConnection && this.localStream) {
                 this.setupPeerConnection();
-                const offer = await this.peerConnection.createOffer();
+                offer = await this.peerConnection.createOffer();
                 await this.peerConnection.setLocalDescription(offer);
-
-                // 4. Send Signaling Offer via WebSocket if available
-                this.sendWs({
-                    type: 'call_offer',
-                    target_user_id: receiverId,
-                    call_id: this.currentCallId,
-                    call_type: callType,
-                    caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
-                    caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
-                    sdp: offer
-                });
             }
         } catch (webrtcErr) {
             console.warn('[WebRTC] WebRTC handshake warning:', webrtcErr);
         }
+
+        // 4. Send Signaling Offer via WebSocket - ALWAYS SEND so recipient rings!
+        this.sendWs({
+            type: 'call_offer',
+            target_user_id: receiverId,
+            call_id: this.currentCallId,
+            call_type: callType,
+            caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
+            caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
+            sdp: offer
+        });
 
         return true;
     }
@@ -186,6 +182,7 @@ class WebRTCManager {
         }
 
         this.peerConnection = new RTCPeerConnection(this.iceConfig);
+        this.pendingIceCandidates = [];
 
         // Add local tracks to peer connection
         if (this.localStream) {
@@ -194,14 +191,33 @@ class WebRTCManager {
             });
         }
 
-        // Remote track received
+        // Remote track received -> Attach to Audio and/or Video elements
         this.peerConnection.ontrack = (event) => {
             console.log('[WebRTC] Received remote track', event.streams[0]);
             this.remoteStream = event.streams[0];
 
+            // 1. Voice audio output
+            let remoteAudio = document.getElementById('remoteAudio');
+            if (!remoteAudio) {
+                remoteAudio = document.createElement('audio');
+                remoteAudio.id = 'remoteAudio';
+                remoteAudio.autoplay = true;
+                remoteAudio.playsInline = true;
+                remoteAudio.style.display = 'none';
+                document.body.appendChild(remoteAudio);
+            }
+            try {
+                remoteAudio.srcObject = this.remoteStream;
+                remoteAudio.play().catch(e => console.warn('[WebRTC] remoteAudio autoplay:', e));
+            } catch (err) {}
+
+            // 2. Video output (if video call)
             const remoteVideo = document.getElementById('remoteVideo');
             if (remoteVideo) {
-                remoteVideo.srcObject = this.remoteStream;
+                try {
+                    remoteVideo.srcObject = this.remoteStream;
+                    remoteVideo.play().catch(e => console.warn('[WebRTC] remoteVideo autoplay:', e));
+                } catch (err) {}
             }
         };
 
@@ -224,10 +240,24 @@ class WebRTCManager {
         };
     }
 
+    async drainPendingIceCandidates() {
+        if (this.peerConnection && this.pendingIceCandidates && this.pendingIceCandidates.length > 0) {
+            for (const cand of this.pendingIceCandidates) {
+                try {
+                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (e) {
+                    console.warn('[WebRTC] Drain ICE candidate error:', e);
+                }
+            }
+            this.pendingIceCandidates = [];
+        }
+    }
+
     async handleIncomingOffer(payload) {
         this.activePeerId = payload.from_user_id;
         this.currentCallId = payload.call_id;
         this.callType = payload.call_type || 'voice';
+        this.callConnected = true;
 
         // Obtain local media
         const constraints = {
@@ -239,33 +269,46 @@ class WebRTCManager {
             try {
                 this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (err) {
-                console.warn('getUserMedia failed for answer:', err);
+                console.warn('[WebRTC] getUserMedia failed for answer:', err);
             }
         }
 
         if (this.callType === 'video' && this.localStream) {
             const localVideo = document.getElementById('localVideo');
-            if (localVideo) localVideo.srcObject = this.localStream;
+            if (localVideo) {
+                localVideo.srcObject = this.localStream;
+                localVideo.play().catch(() => {});
+            }
         }
 
+        let answer = null;
         if (window.RTCPeerConnection && payload.sdp) {
             try {
                 this.setupPeerConnection();
                 await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-                const answer = await this.peerConnection.createAnswer();
+                await this.drainPendingIceCandidates();
+                answer = await this.peerConnection.createAnswer();
                 await this.peerConnection.setLocalDescription(answer);
-
-                // Send answer back to caller
-                this.sendWs({
-                    type: 'call_answer',
-                    target_user_id: payload.from_user_id,
-                    call_id: this.currentCallId,
-                    sdp: answer
-                });
             } catch (e) {
                 console.warn('[WebRTC] SDP handshake warning:', e);
             }
         }
+
+        // Send answer back to caller via WebSocket - ALWAYS SEND so caller UI transitions instantly
+        this.sendWs({
+            type: 'call_answer',
+            target_user_id: payload.from_user_id,
+            call_id: this.currentCallId,
+            sdp: answer
+        });
+
+        // Also notify call_status answered
+        this.sendWs({
+            type: 'call_status',
+            target_user_id: payload.from_user_id,
+            call_id: this.currentCallId,
+            status: 'answered'
+        });
 
         // Notify DB call answered
         fetch('api/calls/update.php', {
@@ -274,15 +317,21 @@ class WebRTCManager {
             body: JSON.stringify({ call_id: this.currentCallId, status: 'answered' })
         }).catch(() => {});
 
-        this.callConnected = true;
         // Start status polling on receiver side too so if caller hangs up, receiver ends
         this.startStatusPolling(this.currentCallId);
     }
 
     async handleIncomingAnswer(payload) {
+        this.callConnected = true;
+        if (this.ringingTimeout) {
+            clearTimeout(this.ringingTimeout);
+            this.ringingTimeout = null;
+        }
+
         if (this.peerConnection && payload.sdp) {
             try {
                 await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+                await this.drainPendingIceCandidates();
             } catch (e) {
                 console.warn('[WebRTC] Answer setRemoteDescription error:', e);
             }
@@ -290,12 +339,17 @@ class WebRTCManager {
     }
 
     async handleIncomingIce(payload) {
-        if (this.peerConnection && payload.candidate) {
+        if (!payload.candidate) return;
+
+        if (this.peerConnection && this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type) {
             try {
                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
             } catch (e) {
                 console.error('[WebRTC] Error adding ICE candidate', e);
             }
+        } else {
+            this.pendingIceCandidates = this.pendingIceCandidates || [];
+            this.pendingIceCandidates.push(payload.candidate);
         }
     }
 
@@ -384,6 +438,21 @@ class WebRTCManager {
         this.currentCallId = null;
         this.isAudioMuted = false;
         this.isVideoMuted = false;
+        this.pendingIceCandidates = [];
+
+        // Clear audio & video players
+        const remoteAudio = document.getElementById('remoteAudio');
+        if (remoteAudio) {
+            try { remoteAudio.pause(); remoteAudio.srcObject = null; } catch (e) {}
+        }
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            try { remoteVideo.pause(); remoteVideo.srcObject = null; } catch (e) {}
+        }
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) {
+            try { localVideo.pause(); localVideo.srcObject = null; } catch (e) {}
+        }
     }
 }
 

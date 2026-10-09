@@ -212,53 +212,8 @@ $userAvatar = $currentUser['profile_image'] ?
         window._openChatWithImpl = openChatWith;
 
         function startCall(type) {
-            type = (type === 'video') ? 'video' : 'voice';
-            let friendId = window.activeFriendId;
-            let friendName = 'A/N User';
-            let friendAvatar = 'assets/images/default-avatar.png';
-            let isOffline = true;
-
-            if (window.chatManager && window.chatManager.activeFriend) {
-                friendId = window.chatManager.activeFriend.id;
-                friendName = window.chatManager.activeFriend.name || friendName;
-                friendAvatar = window.chatManager.activeFriend.avatar || friendAvatar;
-                isOffline = (window.chatManager.activeFriend.status !== 'online');
-            } else if (friendId) {
-                const headerName = document.getElementById('chatHeaderName');
-                if (headerName && headerName.textContent.trim()) {
-                    friendName = headerName.textContent.trim();
-                }
-                const headerAvatar = document.getElementById('chatHeaderAvatar');
-                if (headerAvatar && headerAvatar.src) {
-                    friendAvatar = headerAvatar.src;
-                }
-                const statusDot = document.getElementById('chatHeaderStatus');
-                if (statusDot && statusDot.classList.contains('online')) {
-                    isOffline = false;
-                }
-            }
-
-            if (!friendId) {
-                if (typeof showToast === 'function') {
-                    showToast('Fadlan marka hore dooro qofka aad rabto inaad wacdo!', 'warning');
-                } else {
-                    alert('Fadlan marka hore dooro qofka aad rabto inaad wacdo!');
-                }
-                return;
-            }
-
-            if (!window.callController && typeof CallController === 'function') {
-                try { window.callController = new CallController(); } catch (e) { console.error(e); }
-            }
-            if (!window.webrtc && typeof WebRTCManager === 'function') {
-                try { window.webrtc = new WebRTCManager(window.wsClient || null); } catch (e) { console.error(e); }
-            }
-
-            if (window.callController) {
-                window.callController.startOutgoingCall(friendName, friendAvatar, type, isOffline);
-            }
-            if (window.webrtc) {
-                window.webrtc.initiateCall(friendId, type);
+            if (typeof window.startCall === 'function') {
+                window.startCall(type);
             }
         }
         window.startCall = startCall;
@@ -528,10 +483,10 @@ $userAvatar = $currentUser['profile_image'] ?
                     </div>
 
                     <div class="chat-header-actions">
-                        <button class="btn-icon" id="btnStartVoiceCall" title="Start Voice Call" style="color:var(--primary);" onclick="startCall('voice')">
+                        <button class="btn-icon" id="btnStartVoiceCall" title="Start Voice Call" style="color:var(--primary);">
                             <i class="fas fa-phone-alt"></i>
                         </button>
-                        <button class="btn-icon" id="btnStartVideoCall" title="Start Video Call" style="color:var(--primary);" onclick="startCall('video')">
+                        <button class="btn-icon" id="btnStartVideoCall" title="Start Video Call" style="color:var(--primary);">
                             <i class="fas fa-video"></i>
                         </button>
                         <div style="position:relative;">
@@ -660,6 +615,9 @@ $userAvatar = $currentUser['profile_image'] ?
     <!-- 5. WEBRTC CALL OVERLAY MODAL (Voice & Video)   -->
     <!-- ============================================== -->
     <div class="call-modal-overlay" id="callModalOverlay">
+        <!-- Remote Audio Stream Player for Voice Calls -->
+        <audio id="remoteAudio" autoplay playsinline style="display:none;"></audio>
+
         <!-- A. Incoming Call Screen -->
         <div class="incoming-call-box" id="incomingCallBox" style="display:none;">
             <div class="incoming-call-avatar">

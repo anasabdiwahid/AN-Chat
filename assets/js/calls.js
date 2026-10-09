@@ -140,6 +140,20 @@ class CallController {
             this.callTimerEl.textContent = '00:00';
         }
 
+        // Reset mute buttons to default unmuted state
+        const muteBtns = [document.getElementById('btnToggleVoiceMute'), document.getElementById('btnToggleVideoAudio')];
+        muteBtns.forEach(b => {
+            if (b) {
+                b.classList.remove('muted');
+                b.innerHTML = '<i class="fas fa-microphone"></i>';
+            }
+        });
+        const camBtn = document.getElementById('btnToggleVideoCam');
+        if (camBtn) {
+            camBtn.classList.remove('muted');
+            camBtn.innerHTML = '<i class="fas fa-video"></i>';
+        }
+
         // Play standard telephone ringback tone to caller
         this.startRingbackTone();
 
@@ -267,10 +281,16 @@ class CallController {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.ringbackCtx = new AudioContext();
+            if (this.ringbackCtx.state === 'suspended') {
+                this.ringbackCtx.resume().catch(() => {});
+            }
             this.isRingbackPlaying = true;
 
             const playTone = () => {
                 if (!this.isRingbackPlaying || !this.ringbackCtx) return;
+                if (this.ringbackCtx.state === 'suspended') {
+                    this.ringbackCtx.resume().catch(() => {});
+                }
                 const now = this.ringbackCtx.currentTime;
                 const osc1 = this.ringbackCtx.createOscillator();
                 const osc2 = this.ringbackCtx.createOscillator();
@@ -317,10 +337,16 @@ class CallController {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new AudioContext();
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume().catch(() => {});
+            }
             this.isRinging = true;
 
             const playBurst = () => {
                 if (!this.isRinging || !this.audioContext) return;
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().catch(() => {});
+                }
                 const now = this.audioContext.currentTime;
                 const osc = this.audioContext.createOscillator();
                 const gain = this.audioContext.createGain();
@@ -380,3 +406,93 @@ class CallController {
 }
 
 window.CallController = CallController;
+
+let _isInitiatingCall = false;
+
+/**
+ * Universal Global Function to Initiate a Call with a specific peer
+ */
+window.startCallWith = function(peerId, peerName, peerAvatar, callType = 'voice') {
+    peerId = parseInt(peerId);
+    if (!peerId) {
+        if (typeof showToast === 'function') showToast('Qofka la wacayo lama helin.', 'error');
+        return;
+    }
+
+    if (_isInitiatingCall) {
+        console.warn('[Call] Call initiation already in progress, ignoring duplicate click.');
+        return;
+    }
+    _isInitiatingCall = true;
+    setTimeout(() => { _isInitiatingCall = false; }, 2000);
+
+    // Ensure controllers exist
+    if (!window.callController && typeof CallController === 'function') {
+        window.callController = new CallController();
+    }
+    if (!window.webrtc && typeof WebRTCManager === 'function') {
+        window.webrtc = new WebRTCManager(window.wsClient || null);
+    } else if (window.webrtc && window.wsClient) {
+        window.webrtc.ws = window.wsClient;
+    }
+
+    // 1. Show dialing overlay with ringback tone
+    if (window.callController) {
+        window.callController.startOutgoingCall(peerName || 'Friend', peerAvatar || 'assets/images/default-avatar.png', callType);
+    }
+
+    // 2. Initiate WebRTC peer connection & DB record
+    if (window.webrtc) {
+        window.webrtc.initiateCall(peerId, callType);
+    }
+};
+
+/**
+ * Universal Global Function to Start Call from Active Conversation or Selected Friend
+ */
+window.startCall = function(callType = 'voice') {
+    let peerId = null;
+    let peerName = 'Friend';
+    let peerAvatar = 'assets/images/default-avatar.png';
+
+    // Priority 1: Check chatManager.activeFriend
+    if (window.chatManager && window.chatManager.activeFriend && window.chatManager.activeFriend.id) {
+        peerId = parseInt(window.chatManager.activeFriend.id);
+        peerName = window.chatManager.activeFriend.name || window.chatManager.activeFriend.fullname || peerName;
+        peerAvatar = window.chatManager.activeFriend.avatar || window.chatManager.activeFriend.profile_image || peerAvatar;
+    }
+    // Priority 2: Check window.activeFriendId and cache
+    else if (window.activeFriendId) {
+        peerId = parseInt(window.activeFriendId);
+        if (window.friendsCache && window.friendsCache[peerId]) {
+            peerName = window.friendsCache[peerId].fullname || peerName;
+            peerAvatar = window.friendsCache[peerId].profile_image || peerAvatar;
+        } else {
+            const nameEl = document.getElementById('chatHeaderName');
+            if (nameEl && nameEl.textContent.trim()) peerName = nameEl.textContent.trim();
+        }
+    }
+    // Priority 3: Check active list item
+    else {
+        const activeItem = document.querySelector('.list-item.active');
+        if (activeItem) {
+            const idMatch = activeItem.id.match(/\d+/);
+            if (idMatch) {
+                peerId = parseInt(idMatch[0]);
+                const nameEl = activeItem.querySelector('.list-item-name');
+                if (nameEl) peerName = nameEl.textContent.trim();
+                const imgEl = activeItem.querySelector('img');
+                if (imgEl) peerAvatar = imgEl.src;
+            }
+        }
+    }
+
+    if (!peerId) {
+        if (typeof showToast === 'function') {
+            showToast('Fadlan marka hore dooro qofka aad rabto inaad wacdo (Select a conversation first)', 'info');
+        }
+        return;
+    }
+
+    window.startCallWith(peerId, peerName, peerAvatar, callType);
+};
