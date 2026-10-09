@@ -340,8 +340,9 @@ $userAvatar = $currentUser['profile_image'] ?
             </div>
 
             <nav class="nav-rail-menu">
-                <button class="nav-item active" data-tab="chats" title="Chats" onclick="switchTab('chats')">
+                <button class="nav-item active" data-tab="chats" title="Chats" onclick="switchTab('chats')" style="position:relative;">
                     <i class="fas fa-comment-dots"></i>
+                    <span class="badge chats-badge" style="display:none;position:absolute;top:4px;right:6px;min-width:18px;height:18px;font-size:11px;padding:0 4px;">0</span>
                 </button>
                 <button class="nav-item" data-tab="friends" title="Friends" onclick="switchTab('friends')">
                     <i class="fas fa-user-friends"></i>
@@ -579,9 +580,10 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- 4. BOTTOM MOBILE NAVIGATION                   -->
         <!-- ============================================== -->
         <nav class="bottom-nav">
-            <button class="bottom-nav-item active" data-tab="chats" onclick="switchTab('chats')">
+            <button class="bottom-nav-item active" data-tab="chats" onclick="switchTab('chats')" style="position:relative;">
                 <i class="fas fa-comment-dots"></i>
                 <span>Chats</span>
+                <span class="badge chats-badge" style="display:none;position:absolute;top:3px;right:calc(50% - 18px);min-width:16px;height:16px;font-size:10px;padding:0 3px;">0</span>
             </button>
             <button class="bottom-nav-item" data-tab="friends" onclick="switchTab('friends')">
                 <i class="fas fa-user-friends"></i>

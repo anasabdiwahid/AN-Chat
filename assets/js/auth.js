@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Global Toast Display Helper
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', onClick = null) {
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
@@ -164,8 +164,18 @@ function showToast(message, type = 'info') {
     let icon = '<i class="fas fa-info-circle" style="color:var(--primary);"></i>';
     if (type === 'success') icon = '<i class="fas fa-check-circle" style="color:var(--success);"></i>';
     if (type === 'error') icon = '<i class="fas fa-exclamation-circle" style="color:var(--danger);"></i>';
+    if (type === 'message') icon = '<i class="fas fa-comment-dots" style="color:var(--primary);"></i>';
 
     toast.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
+    if (typeof onClick === 'function') {
+        toast.style.cursor = 'pointer';
+        toast.title = 'Click to open conversation';
+        toast.addEventListener('click', () => {
+            onClick();
+            toast.remove();
+        });
+    }
+
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -173,7 +183,7 @@ function showToast(message, type = 'info') {
         toast.style.transform = 'translateX(60px)';
         toast.style.transition = 'all 0.3s ease';
         setTimeout(() => toast.remove(), 300);
-    }, 3500);
+    }, 4000);
 }
 
 function escapeHtml(text) {

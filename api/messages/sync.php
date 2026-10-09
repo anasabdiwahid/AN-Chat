@@ -12,6 +12,7 @@ $currentUserId = (int)$currentUser['id'];
 
 $lastMsgId = isset($_GET['last_msg_id']) ? (int)$_GET['last_msg_id'] : 0;
 $activeFriendId = isset($_GET['active_friend_id']) ? (int)$_GET['active_friend_id'] : 0;
+$lastGlobalId = isset($_GET['last_global_id']) ? (int)$_GET['last_global_id'] : 0;
 
 $db = Database::getConnection();
 
@@ -86,10 +87,46 @@ if ($activeFriendId > 0) {
     $deletedMessageIds = $stmtDel->fetchAll(PDO::FETCH_COLUMN);
 }
 
+// 1b. Global incoming messages check across ALL friends (for instant toasts and alerts even when not in chat)
+$stmtMax = $db->prepare("SELECT COALESCE(MAX(id), 0) FROM messages WHERE receiver_id = :uid");
+$stmtMax->execute([':uid' => $currentUserId]);
+$currentMaxReceiverId = (int)$stmtMax->fetchColumn();
+
+$recentIncoming = [];
+if ($lastGlobalId > 0 && $currentMaxReceiverId > $lastGlobalId) {
+    $stmtRecent = $db->prepare("
+        SELECT m.id, m.sender_id, m.receiver_id, m.message, m.message_type, m.created_at,
+               u.fullname AS sender_name, u.profile_image AS sender_image
+        FROM messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.receiver_id = :uid 
+          AND m.id > :last_gid
+          AND (m.deleted_for_all = 0 OR m.deleted_for_all IS NULL)
+        ORDER BY m.id ASC
+        LIMIT 30
+    ");
+    $stmtRecent->execute([':uid' => $currentUserId, ':last_gid' => $lastGlobalId]);
+    $recentIncoming = $stmtRecent->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($recentIncoming as &$rm) {
+        if (!empty($rm['sender_image'])) {
+            if (!str_starts_with($rm['sender_image'], 'http') && !str_starts_with($rm['sender_image'], 'assets/') && !str_starts_with($rm['sender_image'], 'uploads/')) {
+                $rm['sender_image'] = 'uploads/images/' . $rm['sender_image'];
+            }
+        } else {
+            $rm['sender_image'] = 'assets/images/default-avatar.png';
+        }
+    }
+    unset($rm);
+}
+$newGlobalId = max($lastGlobalId, $currentMaxReceiverId);
+
 // 2. Fetch conversations summary (Friends list with latest message, unread counts, and status)
 $friendModel = new Friend();
 $conversations = $friendModel->getFriendsList($currentUserId);
+$totalUnreadMessages = 0;
 foreach ($conversations as &$c) {
+    $totalUnreadMessages += (int)($c['unread_count'] ?? 0);
     if (!empty($c['profile_image'])) {
         if (!str_starts_with($c['profile_image'], 'http') && !str_starts_with($c['profile_image'], 'assets/') && !str_starts_with($c['profile_image'], 'uploads/')) {
             $c['profile_image'] = 'uploads/images/' . $c['profile_image'];
@@ -139,12 +176,15 @@ $notifModel = new Notification();
 $unreadNotifs = $notifModel->getUnreadCount($currentUserId);
 
 jsonResponse(true, 'Sync status', [
-    'new_messages'         => $newMessages,
-    'read_message_ids'     => array_map('intval', $readMessageIds),
-    'deleted_message_ids'  => array_map('intval', $deletedMessageIds),
-    'conversations'        => $conversations,
-    'system_settings'      => $systemSettings,
-    'unread_notifications' => (int)$unreadNotifs,
-    'incoming_call'        => $incomingCall ?: null,
-    'timestamp'            => time()
+    'new_messages'          => $newMessages,
+    'read_message_ids'      => array_map('intval', $readMessageIds),
+    'deleted_message_ids'   => array_map('intval', $deletedMessageIds),
+    'recent_incoming'       => $recentIncoming,
+    'max_global_id'         => $newGlobalId,
+    'conversations'         => $conversations,
+    'total_unread_messages' => $totalUnreadMessages,
+    'system_settings'       => $systemSettings,
+    'unread_notifications'  => (int)$unreadNotifs,
+    'incoming_call'         => $incomingCall ?: null,
+    'timestamp'             => time()
 ]);

@@ -848,11 +848,12 @@ function updateUserStatusInUI(userId, status, lastSeen) {
 }
 
 /* ========================================================== */
-/* Unified Real-Time 4-Second Auto-Sync Engine                */
+/* Unified Real-Time 1-Second Auto-Sync Engine                */
 /* (Auto-Refresh & Auto-Save: Messages, Settings, Badges)    */
 /* ========================================================== */
 let isSyncInProgress = false;
 let previousUnreadMap = {};
+let autoSyncIntervalTimer = null;
 
 function refreshCurrentTab() {
     const activeTab = document.querySelector('.nav-item.active, .bottom-nav-item.active')?.getAttribute('data-tab') || 'chats';
@@ -869,10 +870,22 @@ function refreshCurrentTab() {
 window.refreshCurrentTab = refreshCurrentTab;
 
 function startUnifiedAutoSyncEngine() {
-    // Fast 2.5s auto-sync for instant messages, live status, and responsive incoming calls
-    const intervalMs = 2500;
-    setTimeout(runAutoSyncHeartbeat, 1000);
-    setInterval(runAutoSyncHeartbeat, intervalMs);
+    // Ultra-Fast 1-Second Background Auto-Sync Engine (Auto-Refresh & Auto-Save every 1 second)
+    const intervalMs = 1000;
+    if (autoSyncIntervalTimer) clearInterval(autoSyncIntervalTimer);
+    setTimeout(runAutoSyncHeartbeat, 300);
+    autoSyncIntervalTimer = setInterval(runAutoSyncHeartbeat, intervalMs);
+
+    // Request Web Notification permission on first user interaction so alerts pop up even if tab minimized
+    const requestPushPermission = () => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            try { Notification.requestPermission().catch(() => {}); } catch (e) {}
+        }
+        document.removeEventListener('click', requestPushPermission);
+        document.removeEventListener('touchstart', requestPushPermission);
+    };
+    document.addEventListener('click', requestPushPermission, { once: true });
+    document.addEventListener('touchstart', requestPushPermission, { once: true });
 }
 
 async function runAutoSyncHeartbeat() {
@@ -883,10 +896,11 @@ async function runAutoSyncHeartbeat() {
     try {
         const activeFriendId = (window.chatManager && window.chatManager.activeFriend) ? parseInt(window.chatManager.activeFriend.id) : 0;
         const lastMsgId = (window.chatManager && window.chatManager.highestMessageId) ? parseInt(window.chatManager.highestMessageId) : 0;
+        const lastGlobalId = window.highestGlobalMessageId || 0;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5500);
-        const res = await fetch(`api/messages/sync.php?active_friend_id=${activeFriendId}&last_msg_id=${lastMsgId}`, { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`api/messages/sync.php?active_friend_id=${activeFriendId}&last_msg_id=${lastMsgId}&last_global_id=${lastGlobalId}`, { signal: controller.signal });
         clearTimeout(timeoutId);
         const data = await res.json();
 
@@ -894,13 +908,18 @@ async function runAutoSyncHeartbeat() {
             handleAutoSyncPayload(data.data, activeFriendId);
         }
     } catch (err) {
-        console.debug('[AutoSync] Silent sync retry:', err);
+        // Silent retry
     } finally {
         isSyncInProgress = false;
     }
 }
 
 function handleAutoSyncPayload(payload, activeFriendId) {
+    // 0. Advance Global Message ID Cursor
+    if (payload.max_global_id) {
+        window.highestGlobalMessageId = Math.max(window.highestGlobalMessageId || 0, parseInt(payload.max_global_id));
+    }
+
     // 1. Process New Messages in Active Chat
     if (activeFriendId > 0 && Array.isArray(payload.new_messages) && payload.new_messages.length > 0) {
         if (window.chatManager && window.chatManager.activeFriend && parseInt(window.chatManager.activeFriend.id) === activeFriendId) {
@@ -924,6 +943,54 @@ function handleAutoSyncPayload(payload, activeFriendId) {
         }
     }
 
+    // 1b. Process Incoming Messages Across The Whole App (Instant Toast & Sound if chat not currently open)
+    if (Array.isArray(payload.recent_incoming) && payload.recent_incoming.length > 0) {
+        payload.recent_incoming.forEach(msg => {
+            const senderId = parseInt(msg.sender_id);
+            const isCurrentlyChatting = (activeFriendId > 0 && activeFriendId === senderId);
+
+            if (!isCurrentlyChatting) {
+                // Play notification sound
+                if (window.chatManager && typeof window.chatManager.playMessagePing === 'function') {
+                    window.chatManager.playMessagePing();
+                }
+
+                let preview = msg.message || '';
+                if (msg.message_type === 'image') preview = '📷 Photo';
+                if (msg.message_type === 'video') preview = '🎥 Video';
+                if (msg.message_type === 'voice') preview = '🎤 Voice message';
+                if (msg.message_type === 'document') preview = '📄 Document';
+
+                const safeSender = msg.sender_name || 'Friend';
+
+                // Display interactive toast notification (click toast to open chat immediately)
+                showToast(`💬 ${safeSender}: ${preview}`, 'message', () => {
+                    if (typeof openChatWith === 'function') {
+                        openChatWith(senderId, safeSender, msg.sender_image, 'online');
+                    }
+                });
+
+                // Display native system push notification if permission granted
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    try {
+                        const notif = new Notification(safeSender, {
+                            body: preview,
+                            icon: msg.sender_image || 'assets/icons/icon-192.png',
+                            badge: 'assets/icons/favicon.png',
+                            tag: 'chat-msg-' + senderId
+                        });
+                        notif.onclick = () => {
+                            window.focus();
+                            if (typeof openChatWith === 'function') {
+                                openChatWith(senderId, safeSender, msg.sender_image, 'online');
+                            }
+                        };
+                    } catch (e) {}
+                }
+            }
+        });
+    }
+
     // 2. Process Read Receipts & Deleted Messages in Active Chat
     if (activeFriendId > 0 && window.chatManager) {
         if (Array.isArray(payload.read_message_ids) && payload.read_message_ids.length > 0) {
@@ -939,7 +1006,20 @@ function handleAutoSyncPayload(payload, activeFriendId) {
         updateConversationsListUI(payload.conversations);
     }
 
-    // 4. Process System Settings (Admin Updates)
+    // 3b. Update Total Unread Messages Badges (Navigation Rail & Mobile Bottom Bar)
+    if (typeof payload.total_unread_messages !== 'undefined') {
+        const total = parseInt(payload.total_unread_messages) || 0;
+        document.querySelectorAll('.chats-badge').forEach(b => {
+            if (total > 0) {
+                b.style.display = 'inline-flex';
+                b.textContent = total > 99 ? '99+' : total;
+            } else {
+                b.style.display = 'none';
+            }
+        });
+    }
+
+    // 4. Process System Settings (Admin Updates in Real-Time without Refresh)
     if (payload.system_settings) {
         const prevSettings = window.SYSTEM_SETTINGS ? { ...window.SYSTEM_SETTINGS } : {};
         window.SYSTEM_SETTINGS = Object.assign(window.SYSTEM_SETTINGS || {}, payload.system_settings);
@@ -967,6 +1047,13 @@ function handleAutoSyncPayload(payload, activeFriendId) {
                 b.style.display = 'none';
             }
         });
+
+        // If user is currently viewing the notifications tab and a new notification arrived, auto-refresh it
+        const activeTab = document.querySelector('.nav-item.active, .bottom-nav-item.active')?.getAttribute('data-tab') || 'chats';
+        if (activeTab === 'notifications' && window.NotificationManager && typeof window.lastUnreadNotifsCount !== 'undefined' && count !== window.lastUnreadNotifsCount) {
+            NotificationManager.loadList(document.getElementById('middleListContainer'));
+        }
+        window.lastUnreadNotifsCount = count;
     }
 
     // 6. Incoming Call Handling
@@ -1002,10 +1089,17 @@ function handleAutoSyncPayload(payload, activeFriendId) {
 function updateConversationsListUI(conversations) {
     if (!Array.isArray(conversations)) return;
 
+    // Always maintain friends cache regardless of active tab
+    conversations.forEach(f => {
+        const friendId = parseInt(f.id);
+        window.friendsCache = window.friendsCache || {};
+        window.friendsCache[friendId] = f;
+    });
+
     const container = document.getElementById('middleListContainer');
     if (!container) return;
 
-    // Only update if current active tab is 'chats'
+    // Only update middle list container DOM if current active tab is 'chats'
     const activeTab = document.querySelector('.nav-item.active, .bottom-nav-item.active')?.getAttribute('data-tab') || 'chats';
     if (activeTab !== 'chats') return;
 
@@ -1055,20 +1149,9 @@ function updateConversationsListUI(conversations) {
             if (f.last_message_type === 'voice') previewText = '🎤 Voice message';
             if (f.last_message_type === 'document') previewText = '📄 Document';
 
-            // Check if unread count increased from previous check
-            const prevUnread = previousUnreadMap[friendId] || 0;
-            if (unreadCount > prevUnread && currentActiveFriendId !== friendId) {
-                if (window.chatManager && typeof window.chatManager.playMessagePing === 'function') {
-                    window.chatManager.playMessagePing();
-                }
-                showToast(`💬 ${f.fullname}: ${previewText}`, 'info');
-            }
             previousUnreadMap[friendId] = unreadCount;
 
             const isActive = (currentActiveFriendId === friendId);
-
-            window.friendsCache = window.friendsCache || {};
-            window.friendsCache[friendId] = f;
 
             const safeName = window.escapeHtml ? window.escapeHtml(f.fullname || 'Friend') : (f.fullname || 'Friend');
             const safeTime = window.formatDate ? window.formatDate(f.last_message_time) : '';

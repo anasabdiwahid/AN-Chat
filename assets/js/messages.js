@@ -393,6 +393,11 @@ class ChatManager {
                         message_data: data.data
                     });
                 }
+
+                // Immediate background sync
+                if (typeof runAutoSyncHeartbeat === 'function') {
+                    setTimeout(runAutoSyncHeartbeat, 200);
+                }
             } else {
                 showToast(data.message || 'Failed to send media', 'error');
             }
