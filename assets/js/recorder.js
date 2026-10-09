@@ -96,7 +96,13 @@ class VoiceRecorder {
             }
 
             this.mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                // Preserve the format chosen by the browser. iOS Safari may
+                // record audio/mp4, so forcing audio/webm makes sent notes fail
+                // to play on the sender's device and on some recipients.
+                const recordedType = this.mediaRecorder.mimeType
+                    || (this.audioChunks.find(chunk => chunk.type)?.type)
+                    || 'audio/webm';
+                const audioBlob = new Blob(this.audioChunks, { type: recordedType });
                 this.cleanup();
                 resolve(audioBlob);
             };

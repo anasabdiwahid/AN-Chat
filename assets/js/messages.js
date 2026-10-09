@@ -588,9 +588,7 @@ class ChatManager {
         } else if (msg.message_type === 'voice') {
             mediaHtml = `
                 <div class="bubble-media-voice">
-                    <audio controls style="height:36px;outline:none;">
-                        <source src="${escapeHtml(msg.file_path)}" type="audio/webm">
-                    </audio>
+                    <audio controls preload="metadata" playsinline src="${escapeHtml(msg.file_path)}" aria-label="Play voice message"></audio>
                 </div>
             `;
         }
