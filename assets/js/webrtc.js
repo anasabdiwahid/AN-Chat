@@ -103,12 +103,13 @@ class WebRTCManager {
             }, 35000);
 
             this.startSignalPolling(this.currentCallId);
-            await this.sendCallSignal('offer', {
+            const offerSignal = await this.sendCallSignal('offer', {
                 call_type: callType,
                 caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
                 caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
                 sdp: this.localOffer
             });
+            if (!offerSignal) throw new Error('Offer-ka wicitaanka server-ka ma gaarin. Hubi call_signals database-ka.');
             for (const candidate of (this.pendingLocalIceCandidates || [])) {
                 await this.sendCallSignal('ice', { candidate });
             }
@@ -180,10 +181,13 @@ class WebRTCManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ call_id: this.currentCallId, signal_type: signalType, payload })
             });
-            if (!response.ok) return null;
             const text = await response.text();
             if (!text || !text.trim()) return null;
             const result = JSON.parse(text);
+            if (!response.ok || !result.success) {
+                console.error(`[WebRTC] ${signalType} signaling rejected:`, response.status, result.message || 'Unknown server error');
+                return null;
+            }
             return result && result.data ? result.data : null;
         } catch (e) {
             console.warn('[WebRTC] sendCallSignal network warning:', e);
@@ -205,11 +209,18 @@ class WebRTCManager {
                 const text = await response.text();
                 if (!text || !text.trim()) return;
                 const result = JSON.parse(text);
-                if (!result || !result.success || !Array.isArray(result.data)) return;
+                if (!result || !result.success || !Array.isArray(result.data)) {
+                    console.warn('[WebRTC] Signal poll returned an invalid response:', result && result.message);
+                    return;
+                }
                 for (const signal of result.data) {
                     this.lastSignalId = Math.max(this.lastSignalId, parseInt(signal.id) || 0);
-                    if (signal.signal_type === 'answer') await this.handleIncomingAnswer(signal.payload || {});
-                    else if (signal.signal_type === 'ice') await this.handleIncomingIce(signal.payload || {});
+                    if (signal.signal_type === 'answer') {
+                        console.info('[WebRTC] Received SDP answer through HTTP signaling.');
+                        await this.handleIncomingAnswer(signal.payload || {});
+                    } else if (signal.signal_type === 'ice') {
+                        await this.handleIncomingIce(signal.payload || {});
+                    }
                 }
             } catch (error) {
                 console.warn('[WebRTC] Database signaling poll failed:', error);
@@ -298,6 +309,9 @@ class WebRTCManager {
         };
         this.peerConnection.onicecandidateerror = (event) => {
             console.warn('[WebRTC] ICE server error:', event.errorCode, event.errorText, event.url);
+        };
+        this.peerConnection.onconnectionstatechange = () => {
+            console.info('[WebRTC] Peer connection state:', this.peerConnection && this.peerConnection.connectionState);
         };
 
         this.peerConnection.oniceconnectionstatechange = () => {
@@ -400,6 +414,7 @@ class WebRTCManager {
         try {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             await this.drainPendingIceCandidates();
+            console.info('[WebRTC] Remote SDP answer applied successfully.');
             this.markCallAccepted();
             return true;
         } catch (e) {
