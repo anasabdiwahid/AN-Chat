@@ -65,6 +65,12 @@ define('ICE_SERVERS', [
     // ['urls' => ['turn:relay.example:80', 'turns:relay.example:443?transport=tcp'], 'username' => 'TEMP_USERNAME', 'credential' => 'TEMP_CREDENTIAL'],
 ]);
 
+// Optional Metered Open Relay integration. Create a credential in Metered,
+// then use its credential-scoped API key here (never use the account Secret Key).
+// Leave empty until a Metered account/key has been created.
+define('METERED_APP_NAME', '');
+define('METERED_TURN_API_KEY', '');
+
 // WebSocket Configuration
 // WebSocket runs on port 8085
 define('WS_HOST', 'localhost');

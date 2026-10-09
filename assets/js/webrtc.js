@@ -24,6 +24,7 @@ class WebRTCManager {
         this.audioContext = null;
         this.audioOutputUnlocked = false;
         this.remoteAudioSource = null;
+        this.turnServersPromise = null;
 
         const configuredIceServers = Array.isArray(window.WEBRTC_ICE_SERVERS) ? window.WEBRTC_ICE_SERVERS : [];
         const fallbackStunServers = [
@@ -36,6 +37,34 @@ class WebRTCManager {
                 ...(Array.isArray(window.WEBRTC_TURN_SERVERS) ? window.WEBRTC_TURN_SERVERS : [])],
             iceCandidatePoolSize: 4
         };
+    }
+
+    async loadTurnServers() {
+        const appName = String(window.METERED_APP_NAME || '').trim();
+        const apiKey = String(window.METERED_TURN_API_KEY || '').trim();
+        if (!appName || !apiKey) return this.iceConfig.iceServers;
+        if (!this.turnServersPromise) {
+            this.turnServersPromise = fetch(`https://${encodeURIComponent(appName)}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(apiKey)}`, {
+                cache: 'no-store',
+                mode: 'cors'
+            }).then(async response => {
+                if (!response.ok) throw new Error(`TURN credential request failed (${response.status})`);
+                const servers = await response.json();
+                if (!Array.isArray(servers) || !servers.some(server => server && server.urls && String(server.urls).startsWith('turn'))) {
+                    throw new Error('Metered did not return usable TURN servers. Check the app name, API key, and TURN credential.');
+                }
+                this.iceConfig.iceServers = [...this.iceConfig.iceServers, ...servers];
+                console.info('[WebRTC] Metered TURN relay configuration loaded.');
+                return this.iceConfig.iceServers;
+            }).catch(error => {
+                console.error('[WebRTC] Could not load Metered TURN servers:', error);
+                this.turnServersPromise = null;
+                // Continue with configured STUN/static ICE entries so direct
+                // peer connections remain available when the provider is down.
+                return this.iceConfig.iceServers;
+            });
+        }
+        return this.turnServersPromise;
     }
 
     sendWs(data) {
@@ -100,6 +129,7 @@ class WebRTCManager {
         // the recipient can accept while the caller's permission prompt is
         // still open and the SDP has not been made yet.
         try {
+            await this.loadTurnServers();
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) {
                 throw new Error('Browser-kan ma taageerayo wicitaan cod ah.');
             }
@@ -430,6 +460,8 @@ class WebRTCManager {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) {
             throw new Error('Browser-kan ma taageerayo wicitaanka codka.');
         }
+
+        await this.loadTurnServers();
 
         // Do not mark the call answered until this device has microphone access
         // and has built a real SDP answer containing its audio track.

@@ -962,6 +962,10 @@ $userAvatar = $currentUser['profile_image'] ?
         // ICE/TURN configuration comes from config/config.php. Add TURN
         // credentials there to relay media on restrictive mobile networks.
         window.WEBRTC_ICE_SERVERS = <?= json_encode(ICE_SERVERS, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        // Metered credential-scoped API keys are designed for client-side use.
+        // Never put a Metered account Secret Key in this page.
+        window.METERED_APP_NAME = <?= json_encode(METERED_APP_NAME, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        window.METERED_TURN_API_KEY = <?= json_encode(METERED_TURN_API_KEY, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
         window.SYSTEM_SETTINGS = {
             screenshot_detection: <?= json_encode($screenshotSetting) ?>
