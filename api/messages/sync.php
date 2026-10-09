@@ -16,6 +16,21 @@ $lastGlobalId = isset($_GET['last_global_id']) ? (int)$_GET['last_global_id'] : 
 
 $db = Database::getConnection();
 
+// This authenticated sync request is also the app's HTTP presence heartbeat.
+// Keep the user online even if the optional WebSocket connection drops or is
+// unavailable; update last_seen at most every five seconds to avoid needless
+// writes while the one-second message sync is running.
+$stmtPresence = $db->prepare("
+    UPDATE users
+    SET status = 'online',
+        last_seen = CASE
+            WHEN status <> 'online' OR last_seen < DATE_SUB(NOW(), INTERVAL 5 SECOND) THEN NOW()
+            ELSE last_seen
+        END
+    WHERE id = :uid
+");
+$stmtPresence->execute([':uid' => $currentUserId]);
+
 // 1. Fetch new messages, read status, and deleted status for active conversation
 $newMessages = [];
 $readMessageIds = [];

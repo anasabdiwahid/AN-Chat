@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS `calls` (
     CONSTRAINT `fk_call_receiver` FOREIGN KEY (`receiver_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- WebRTC signaling fallback (offers, answers, and ICE candidates)
+CREATE TABLE IF NOT EXISTS `call_signals` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `call_id` INT NOT NULL,
+    `from_user_id` INT NOT NULL,
+    `to_user_id` INT NOT NULL,
+    `signal_type` ENUM('offer','answer','ice') NOT NULL,
+    `payload` LONGTEXT NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_call_signal_recipient` (`call_id`, `to_user_id`, `id`),
+    INDEX `idx_call_signal_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 8. NOTIFICATIONS TABLE
 CREATE TABLE IF NOT EXISTS `notifications` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -184,6 +197,5 @@ CREATE TABLE IF NOT EXISTS `screenshot_logs` (
 INSERT INTO `users` (`fullname`, `phone`, `password`, `profile_image`, `bio`, `status`, `is_admin`, `created_at`)
 VALUES ('A/N Admin', '613496943', '$2y$10$mnA8qmRMfgmLqgnCl7iBMeGEpU3L9w7Q47FQ7AXNtRt786Xi1sGj2', 'assets/images/logo.png', 'System Administrator — A/N Chat', 'offline', 1, NOW())
 ON DUPLICATE KEY UPDATE `is_admin` = 1;
-
 
 

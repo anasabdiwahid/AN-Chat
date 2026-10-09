@@ -12,7 +12,11 @@ class WebRTCManager {
         this.isAudioMuted = false;
         this.isVideoMuted = false;
         this.callConnected = false;
+        this.callUiActivated = false;
         this.statusPollInterval = null;
+        this.signalPollInterval = null;
+        this.lastSignalId = 0;
+        this.signalPollInProgress = false;
         this.ringingTimeout = null;
 
         this.iceConfig = {
@@ -39,6 +43,7 @@ class WebRTCManager {
         this.activePeerId = receiverId;
         this.callType = callType;
         this.callConnected = false;
+        this.callUiActivated = false;
 
         // Acquire microphone before creating the incoming-call row. Otherwise
         // the recipient can accept while the caller's permission prompt is
@@ -89,23 +94,16 @@ class WebRTCManager {
                 }
             }, 35000);
 
-            this.sendWs({
-                type: 'call_offer',
-                target_user_id: receiverId,
-                call_id: this.currentCallId,
+            this.startSignalPolling(this.currentCallId);
+            await this.sendCallSignal('offer', {
                 call_type: callType,
                 caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
                 caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
                 sdp: this.localOffer
             });
-            (this.pendingLocalIceCandidates || []).forEach(candidate => {
-                this.sendWs({
-                    type: 'call_ice',
-                    target_user_id: receiverId,
-                    call_id: this.currentCallId,
-                    candidate
-                });
-            });
+            for (const candidate of (this.pendingLocalIceCandidates || [])) {
+                await this.sendCallSignal('ice', { candidate });
+            }
             this.pendingLocalIceCandidates = [];
             return true;
         } catch (error) {
@@ -137,15 +135,7 @@ class WebRTCManager {
                 if (data && data.success && data.data) {
                     const status = data.data.status;
                     if (status === 'answered' && !this.callConnected) {
-                        this.callConnected = true;
-                        if (this.ringingTimeout) {
-                            clearTimeout(this.ringingTimeout);
-                            this.ringingTimeout = null;
-                        }
-                        if (window.callController) {
-                            window.callController.showActiveCallScreen(this.callType);
-                            window.callController.startCallTimer();
-                        }
+                        this.markCallConnected();
                     } else if (status === 'declined' || status === 'missed' || status === 'ended') {
                         this.stopStatusPolling();
                         if (window.callController) {
@@ -172,6 +162,53 @@ class WebRTCManager {
             clearInterval(this.statusPollInterval);
             this.statusPollInterval = null;
         }
+    }
+
+    async sendCallSignal(signalType, payload) {
+        if (!this.currentCallId) throw new Error('Call ID is missing for signaling.');
+        const response = await fetch('api/calls/signal.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ call_id: this.currentCallId, signal_type: signalType, payload })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Call signal could not be delivered.');
+        }
+        return result.data;
+    }
+
+    startSignalPolling(callId) {
+        this.stopSignalPolling();
+        this.lastSignalId = 0;
+        this.signalPollInterval = setInterval(async () => {
+            if (this.signalPollInProgress || parseInt(this.currentCallId) !== parseInt(callId)) return;
+            this.signalPollInProgress = true;
+            try {
+                const response = await fetch(`api/calls/signal.php?call_id=${encodeURIComponent(callId)}&after_id=${this.lastSignalId}`, {
+                    cache: 'no-store', credentials: 'same-origin'
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success || !Array.isArray(result.data)) return;
+                for (const signal of result.data) {
+                    this.lastSignalId = Math.max(this.lastSignalId, parseInt(signal.id) || 0);
+                    if (signal.signal_type === 'answer') await this.handleIncomingAnswer(signal.payload || {});
+                    else if (signal.signal_type === 'ice') await this.handleIncomingIce(signal.payload || {});
+                }
+            } catch (error) {
+                console.warn('[WebRTC] Database signaling poll failed:', error);
+            } finally {
+                this.signalPollInProgress = false;
+            }
+        }, 500);
+    }
+
+    stopSignalPolling() {
+        if (this.signalPollInterval) {
+            clearInterval(this.signalPollInterval);
+            this.signalPollInterval = null;
+        }
+        this.signalPollInProgress = false;
     }
 
     setupPeerConnection() {
@@ -201,10 +238,14 @@ class WebRTCManager {
                 remoteAudio.id = 'remoteAudio';
                 remoteAudio.autoplay = true;
                 remoteAudio.playsInline = true;
+                remoteAudio.muted = false;
+                remoteAudio.volume = 1;
                 remoteAudio.style.display = 'none';
                 document.body.appendChild(remoteAudio);
             }
             try {
+                remoteAudio.muted = false;
+                remoteAudio.volume = 1;
                 remoteAudio.srcObject = this.remoteStream;
                 remoteAudio.play().catch(e => console.warn('[WebRTC] remoteAudio autoplay:', e));
             } catch (err) {}
@@ -226,12 +267,8 @@ class WebRTCManager {
                     this.pendingLocalIceCandidates = this.pendingLocalIceCandidates || [];
                     this.pendingLocalIceCandidates.push(event.candidate);
                 } else {
-                    this.sendWs({
-                        type: 'call_ice',
-                        target_user_id: this.activePeerId,
-                        call_id: this.currentCallId,
-                        candidate: event.candidate
-                    });
+                    this.sendCallSignal('ice', { candidate: event.candidate })
+                        .catch(error => console.warn('[WebRTC] Could not store local ICE candidate:', error));
                 }
             }
         };
@@ -264,6 +301,9 @@ class WebRTCManager {
         if (!payload.sdp || !this.activePeerId || !this.currentCallId) {
             throw new Error('Wicitaanku weli diyaar ma aha. Sug offer-ka wicaha.');
         }
+        if (this.peerConnection && this.peerConnection.remoteDescription
+            && this.peerConnection.remoteDescription.type === 'offer'
+            && parseInt(this.currentCallId) === parseInt(payload.call_id)) return;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) {
             throw new Error('Browser-kan ma taageerayo wicitaanka codka.');
         }
@@ -292,18 +332,7 @@ class WebRTCManager {
         const answer = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(answer);
 
-        this.sendWs({
-            type: 'call_answer',
-            target_user_id: this.activePeerId,
-            call_id: this.currentCallId,
-            sdp: this.peerConnection.localDescription
-        });
-        this.sendWs({
-            type: 'call_status',
-            target_user_id: this.activePeerId,
-            call_id: this.currentCallId,
-            status: 'answered'
-        });
+        await this.sendCallSignal('answer', { sdp: this.peerConnection.localDescription });
         this.callConnected = true;
         await fetch('api/calls/update.php', {
             method: 'POST',
@@ -311,22 +340,43 @@ class WebRTCManager {
             body: JSON.stringify({ call_id: this.currentCallId, status: 'answered' })
         });
         this.startStatusPolling(this.currentCallId);
+        this.startSignalPolling(this.currentCallId);
     }
 
     async handleIncomingAnswer(payload) {
+        if (this.peerConnection && this.peerConnection.remoteDescription
+            && this.peerConnection.remoteDescription.type === 'answer') return;
+        if (!this.peerConnection || !payload.sdp) {
+            console.warn('[WebRTC] Received an answer without a peer connection or SDP.');
+            return false;
+        }
+
+        try {
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            await this.drainPendingIceCandidates();
+            this.markCallConnected();
+            return true;
+        } catch (e) {
+            console.warn('[WebRTC] Answer setRemoteDescription error:', e);
+            return false;
+        }
+    }
+
+    markCallConnected() {
         this.callConnected = true;
         if (this.ringingTimeout) {
             clearTimeout(this.ringingTimeout);
             this.ringingTimeout = null;
         }
+        if (this.callUiActivated) return;
 
-        if (this.peerConnection && payload.sdp) {
-            try {
-                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-                await this.drainPendingIceCandidates();
-            } catch (e) {
-                console.warn('[WebRTC] Answer setRemoteDescription error:', e);
+        this.callUiActivated = true;
+        if (window.callController) {
+            window.callController.showActiveCallScreen(this.callType);
+            if (window.callController.statusTextEl && this.callType === 'voice') {
+                window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
             }
+            window.callController.startCallTimer();
         }
     }
 
@@ -409,11 +459,13 @@ class WebRTCManager {
 
     cleanup() {
         this.stopStatusPolling();
+        this.stopSignalPolling();
         if (this.ringingTimeout) {
             clearTimeout(this.ringingTimeout);
             this.ringingTimeout = null;
         }
         this.callConnected = false;
+        this.callUiActivated = false;
 
         if (this.peerConnection) {
             try { this.peerConnection.close(); } catch (e) {}

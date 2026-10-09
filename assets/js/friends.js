@@ -2,18 +2,27 @@
 
 class FriendsManager {
     static async search(query, containerEl) {
+        const searchHeader = `
+            <div class="friends-search-header">
+                <strong>New Friends</strong>
+                <button type="button" class="btn btn-outline btn-sm" onclick="loadFriendsList()">
+                    <i class="fas fa-arrow-left"></i> All Friends
+                </button>
+            </div>
+        `;
         if (!query || query.trim().length === 0) {
             containerEl.innerHTML = `
+                ${searchHeader}
                 <div class="empty-state">
                     <div class="empty-state-icon"><i class="fas fa-search"></i></div>
                     <div class="empty-state-title">Search Users</div>
-                    <div class="empty-state-desc">Enter a phone number to find friends on A/N Chat.</div>
+                    <div class="empty-state-desc">Enter a phone number above to find and add new friends.</div>
                 </div>
             `;
             return;
         }
 
-        containerEl.innerHTML = `<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner"></div></div>`;
+        containerEl.innerHTML = `${searchHeader}<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner"></div></div>`;
 
         try {
             const res = await fetch(`api/users/search.php?q=${encodeURIComponent(query)}`);
@@ -21,6 +30,7 @@ class FriendsManager {
 
             if (!data.success || !data.data || data.data.length === 0) {
                 containerEl.innerHTML = `
+                    ${searchHeader}
                     <div class="empty-state">
                         <div class="empty-state-icon"><i class="fas fa-user-slash"></i></div>
                         <div class="empty-state-title">User not found</div>
@@ -82,10 +92,10 @@ class FriendsManager {
                 `;
             });
 
-            containerEl.innerHTML = html;
+            containerEl.innerHTML = `${searchHeader}${html}`;
         } catch (e) {
             console.error('Search error', e);
-            containerEl.innerHTML = `<div class="empty-state"><div class="empty-state-desc">Failed to perform search.</div></div>`;
+            containerEl.innerHTML = `${searchHeader}<div class="empty-state"><div class="empty-state-desc">Failed to perform search.</div></div>`;
         }
     }
 
@@ -195,4 +205,3 @@ class FriendsManager {
 }
 
 window.FriendsManager = FriendsManager;
-

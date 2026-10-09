@@ -198,13 +198,6 @@ class CallController {
             this.acceptPendingCallId = parseInt(payload.call_id || payload.id || 0);
             const typeEl = document.getElementById('incomingCallType');
             if (typeEl) typeEl.textContent = 'Connecting to caller...';
-            if (this.acceptPendingCallId && window.wsClient && typeof window.wsClient.send === 'function') {
-                window.wsClient.send({
-                    type: 'call_request_offer',
-                    target_user_id: payload.from_user_id || payload.caller_id,
-                    call_id: this.acceptPendingCallId
-                });
-            }
             return true;
         }
         if (!payload.sdp) {
@@ -528,6 +521,49 @@ async function checkForIncomingCall() {
 window.checkForIncomingCall = checkForIncomingCall;
 checkForIncomingCall();
 setInterval(checkForIncomingCall, 1000);
+
+// Poll the persisted offer independently of WebSocket availability. This is
+// what lets an early Accept tap wait for and then consume the caller's SDP.
+const incomingSignalOffsets = Object.create(null);
+let incomingSignalPollBusy = false;
+async function pollIncomingCallOffer() {
+    const controller = window.callController;
+    const call = controller && controller.pendingIncomingPayload;
+    const callId = parseInt((call && (call.call_id || call.id)) || 0);
+    if (!callId || Object.prototype.hasOwnProperty.call(call, 'sdp') || incomingSignalPollBusy) return;
+    incomingSignalPollBusy = true;
+    try {
+        const afterId = incomingSignalOffsets[callId] || 0;
+        const response = await fetch(`api/calls/signal.php?call_id=${callId}&after_id=${afterId}`, {
+            cache: 'no-store', credentials: 'same-origin'
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success || !Array.isArray(result.data)) return;
+        for (const signal of result.data) {
+            incomingSignalOffsets[callId] = Math.max(incomingSignalOffsets[callId] || 0, parseInt(signal.id) || 0);
+            if (signal.signal_type === 'offer' && parseInt(signal.from_user_id) === parseInt(call.from_user_id || call.caller_id)) {
+                controller.pendingIncomingPayload = {
+                    ...call,
+                    ...(signal.payload || {}),
+                    call_id: callId,
+                    from_user_id: parseInt(signal.from_user_id)
+                };
+                if (parseInt(controller.acceptPendingCallId) === callId) {
+                    await controller.acceptIncomingCall();
+                    break;
+                }
+            } else if (signal.signal_type === 'ice' && window.webrtc
+                && parseInt(window.webrtc.currentCallId) === callId) {
+                await window.webrtc.handleIncomingIce(signal.payload || {});
+            }
+        }
+    } catch (error) {
+        console.warn('[Call] Could not poll incoming offer:', error);
+    } finally {
+        incomingSignalPollBusy = false;
+    }
+}
+setInterval(pollIncomingCallOffer, 400);
 
 let _isInitiatingCall = false;
 

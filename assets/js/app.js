@@ -5,6 +5,8 @@
 let isSyncInProgress = false;
 let previousUnreadMap = {};
 let autoSyncIntervalTimer = null;
+let presenceHeartbeatTimer = null;
+let presenceHeartbeatInProgress = false;
 
 // Global Safe Utilities
 if (typeof window.escapeHtml !== 'function') {
@@ -14,7 +16,10 @@ if (typeof window.escapeHtml !== 'function') {
         return String(text).replace(/[&<>"']/g, m => map[m]);
     };
 }
-const escapeHtml = window.escapeHtml;
+// Other classic scripts expose these helpers as global function declarations.
+// Use var aliases so the dashboard script can share those names without a
+// global lexical redeclaration SyntaxError that would stop all app handlers.
+var escapeHtml = window.escapeHtml;
 
 if (typeof window.formatDate !== 'function') {
     window.formatDate = function(dateStr) {
@@ -28,7 +33,7 @@ if (typeof window.formatDate !== 'function') {
         }
     };
 }
-const formatDate = window.formatDate;
+var formatDate = window.formatDate;
 
 if (typeof window.formatTime !== 'function') {
     window.formatTime = function(dateStr) {
@@ -42,7 +47,7 @@ if (typeof window.formatTime !== 'function') {
         }
     };
 }
-const formatTime = window.formatTime;
+var formatTime = window.formatTime;
 
 if (typeof window.resolveAvatarUrl !== 'function') {
     window.resolveAvatarUrl = function(img) {
@@ -304,8 +309,12 @@ class WebSocketClient {
                 break;
 
             case 'user_status':
-                // Update dot in chat list or active chat
-                updateUserStatusInUI(data.user_id, data.status, data.last_seen);
+                // Offline status is confirmed by the HTTP heartbeat query after
+                // its 60-second grace period; a WebSocket disconnect alone is
+                // not enough to mark an otherwise active user offline.
+                if (data.status !== 'offline') {
+                    updateUserStatusInUI(data.user_id, data.status, data.last_seen);
+                }
                 break;
 
             case 'friend_request':
@@ -323,13 +332,11 @@ function setAppTheme(theme) {
     if (theme === 'dark') {
         document.documentElement.classList.add('dark');
         localStorage.setItem('an_chat_theme', 'dark');
-        const icon = document.querySelector('#btnToggleTheme i');
-        if (icon) icon.className = 'fas fa-sun';
+        document.querySelectorAll('#btnToggleTheme i, [data-theme-toggle] i').forEach(icon => icon.className = 'fas fa-sun');
     } else {
         document.documentElement.classList.remove('dark');
         localStorage.setItem('an_chat_theme', 'light');
-        const icon = document.querySelector('#btnToggleTheme i');
-        if (icon) icon.className = 'fas fa-moon';
+        document.querySelectorAll('#btnToggleTheme i, [data-theme-toggle] i').forEach(icon => icon.className = 'fas fa-moon');
     }
 }
 window.setAppTheme = setAppTheme;
@@ -346,6 +353,58 @@ function toggleAppTheme() {
 }
 window.toggleAppTheme = toggleAppTheme;
 window._toggleThemeImpl = toggleAppTheme;
+
+function renderFriendsListFromCache() {
+    const container = document.getElementById('middleListContainer');
+    if (!container) return;
+
+    const friends = Array.isArray(window.initialFriendsData) ? window.initialFriendsData : [];
+    const safe = value => window.escapeHtml ? window.escapeHtml(value || '') : String(value || '');
+    let html = `
+        <div class="friends-section-header">
+            <div class="friends-section-title">All Friends <span>(${friends.length})</span></div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="startNewFriendSearch()">
+                <i class="fas fa-user-plus"></i> New Friends
+            </button>
+        </div>
+    `;
+
+    if (friends.length) {
+        friends.forEach(friend => {
+            const id = parseInt(friend.id);
+            const name = safe(friend.fullname || 'Friend');
+            const avatar = window.resolveAvatarUrl
+                ? window.resolveAvatarUrl(friend.profile_image)
+                : (friend.profile_image || 'assets/images/default-avatar.png');
+            const status = friend.status || 'offline';
+            const safeName = name.replace(/'/g, "\\'");
+            const safeAvatar = avatar.replace(/'/g, "\\'");
+            html += `
+                <div class="list-item" id="friend-item-${id}" onclick="openChatWith(${id}, '${safeName}', '${safeAvatar}', '${status}')" style="cursor:pointer;">
+                    <div class="avatar avatar-md">
+                        <img src="${avatar}" alt="${name}" onerror="this.src='assets/images/default-avatar.png'">
+                        <span class="status-dot ${status}"></span>
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-name">${name}</div>
+                        <div class="list-item-preview">${safe(friend.phone || '')}</div>
+                    </div>
+                    <span class="btn btn-secondary btn-sm">Chat</span>
+                </div>
+            `;
+        });
+    } else {
+        html += `
+            <div class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-user-friends"></i></div>
+                <div class="empty-state-title">No friends yet</div>
+                <div class="empty-state-desc">Use New Friends to find and add people.</div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
 
 function switchTab(tab) {
     if (!tab) return;
@@ -379,6 +438,7 @@ function switchTab(tab) {
         case 'friends':
             if (middleTitle) middleTitle.textContent = 'Friends';
             if (searchInput) searchInput.placeholder = 'Search by phone number...';
+            renderFriendsListFromCache();
             loadFriendsList();
             break;
         case 'calls':
@@ -407,10 +467,13 @@ window._switchTabImpl = switchTab;
 function setupTabNavigation() {
     const navItems = document.querySelectorAll('.nav-item[data-tab], .bottom-nav-item[data-tab]');
     navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
+        // These controls also had inline onclick handlers. Assigning one click
+        // handler here replaces the inline one instead of firing twice.
+        item.onclick = (e) => {
+            e.preventDefault();
             const tab = item.getAttribute('data-tab');
             if (tab) switchTab(tab);
-        });
+        };
     });
 }
 
@@ -438,22 +501,25 @@ async function loadChatsList(filterQuery = '') {
 
         // If fetch succeeded with data
         if (data && data.success && Array.isArray(data.data)) {
-            if (data.data.length === 0) {
+            // Chats shows people with an existing conversation; the Friends
+            // tab still uses the full list, including friends not messaged yet.
+            const conversations = data.data.filter(f => f.last_message_time || f.last_message || f.last_message_type);
+            if (conversations.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon"><i class="fas fa-comments"></i></div>
                         <div class="empty-state-title">No chats yet</div>
-                        <div class="empty-state-desc">You don't have any chats yet. Search for friends by phone number to start chatting.</div>
+                        <div class="empty-state-desc">People you have chatted with will appear here.</div>
                         <button class="btn btn-primary btn-sm" onclick="switchTab('friends')">Find Friends</button>
                     </div>
                 `;
                 return;
             }
 
-            let filtered = data.data;
+            let filtered = conversations;
             if (filterQuery) {
                 const q = filterQuery.toLowerCase();
-                filtered = data.data.filter(f => (f.fullname && f.fullname.toLowerCase().includes(q)) || (f.phone && f.phone.includes(q)));
+                filtered = conversations.filter(f => (f.fullname && f.fullname.toLowerCase().includes(q)) || (f.phone && f.phone.includes(q)));
             }
 
             let html = '';
@@ -537,7 +603,10 @@ function initializeDashboardApp() {
 
     const themeToggleBtn = document.getElementById('btnToggleTheme');
     if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', toggleAppTheme);
+        themeToggleBtn.onclick = (e) => {
+            e.preventDefault();
+            toggleAppTheme();
+        };
     }
 
     // 2. Initialize WebSocket Client (Smart detection for Localhost vs InfinityFree)
@@ -617,7 +686,11 @@ function initializeDashboardApp() {
 async function loadFriendsList() {
     const container = document.getElementById('middleListContainer');
     if (!container) return;
-    container.innerHTML = `<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner"></div></div>`;
+    const searchInput = document.getElementById('middleSearchInput');
+    if (searchInput) searchInput.placeholder = 'Search friends or phone number...';
+    if (!container.querySelector('.friends-section-header')) {
+        container.innerHTML = `<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner"></div></div>`;
+    }
 
     try {
         // Fetch pending requests + friends
@@ -627,6 +700,9 @@ async function loadFriendsList() {
         ]);
         const dataP = await resP.json();
         const dataF = await resF.json();
+        if (dataF.success && Array.isArray(dataF.data)) {
+            window.initialFriendsData = dataF.data;
+        }
 
         let html = '';
 
@@ -654,7 +730,15 @@ async function loadFriendsList() {
         }
 
         // Friends Header & List
-        html += `<div style="padding:14px 18px 4px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;">All Friends</div>`;
+        const friendCount = dataF.success && Array.isArray(dataF.data) ? dataF.data.length : 0;
+        html += `
+            <div class="friends-section-header">
+                <div class="friends-section-title">All Friends <span>(${friendCount})</span></div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="startNewFriendSearch()">
+                    <i class="fas fa-user-plus"></i> New Friends
+                </button>
+            </div>
+        `;
         if (dataF.success && dataF.data && dataF.data.length > 0) {
             dataF.data.forEach(f => {
                 const friendId = parseInt(f.id);
@@ -702,8 +786,30 @@ async function loadFriendsList() {
         container.innerHTML = html;
     } catch (e) {
         console.error('Load friends error', e);
+        if (!container.querySelector('.friends-section-header')) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-title">Could not load friends</div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="loadFriendsList()">Try again</button>
+                </div>
+            `;
+        }
     }
 }
+
+function startNewFriendSearch() {
+    const input = document.getElementById('middleSearchInput');
+    const container = document.getElementById('middleListContainer');
+    if (!input || !container) return;
+
+    input.value = '';
+    input.placeholder = 'Search by phone number...';
+    if (window.FriendsManager && typeof window.FriendsManager.search === 'function') {
+        window.FriendsManager.search('', container);
+    }
+    input.focus();
+}
+window.startNewFriendSearch = startNewFriendSearch;
 
 async function loadCallsList() {
     const container = document.getElementById('middleListContainer');
@@ -862,18 +968,46 @@ function openChatWith(id, name, avatar, status) {
 window.openChatWith = openChatWith;
 window._openChatWithImpl = openChatWith;
 
+function formatPresenceLabel(status, lastSeen) {
+    if (status === 'online') return 'Online';
+    if (status === 'away') return 'Away';
+    if (!lastSeen) return 'Offline';
+
+    const seenAt = new Date(String(lastSeen).replace(' ', 'T'));
+    if (Number.isNaN(seenAt.getTime())) return 'Offline';
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - seenAt.getTime()) / 1000));
+    if (elapsedSeconds < 60) return 'Last seen just now';
+    const minutes = Math.floor(elapsedSeconds / 60);
+    if (minutes < 60) return `Last seen ${minutes} min${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Last seen ${hours} hr${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    return `Last seen ${days} day${days === 1 ? '' : 's'} ago`;
+}
+window.formatPresenceLabel = formatPresenceLabel;
+
 function updateUserStatusInUI(userId, status, lastSeen) {
+    if (window.friendsCache && window.friendsCache[parseInt(userId)]) {
+        window.friendsCache[parseInt(userId)].status = status;
+        if (lastSeen) window.friendsCache[parseInt(userId)].last_seen = lastSeen;
+    }
     const dot = document.getElementById(`status-dot-${userId}`);
     if (dot) {
         dot.className = `status-dot ${status}`;
+        dot.title = formatPresenceLabel(status, lastSeen);
     }
 
     if (window.chatManager && window.chatManager.activeFriend && parseInt(window.chatManager.activeFriend.id) === parseInt(userId)) {
         window.chatManager.activeFriend.status = status;
+        const headerDot = document.getElementById('chatHeaderStatusDot');
+        if (headerDot) {
+            headerDot.className = `status-dot ${status}`;
+            headerDot.setAttribute('aria-label', status);
+        }
         const statusEl = document.getElementById('chatHeaderStatus');
         if (statusEl) {
             statusEl.className = `chat-header-status ${status}`;
-            statusEl.innerHTML = `<i class="fas fa-circle" style="font-size:8px;"></i> ${status === 'online' ? 'Online' : 'Offline'}`;
+            statusEl.innerHTML = `<i class="fas fa-circle" style="font-size:8px;"></i> ${formatPresenceLabel(status, lastSeen)}`;
         }
     }
 }
@@ -912,6 +1046,47 @@ function startUnifiedAutoSyncEngine() {
     };
     document.addEventListener('click', requestPushPermission, { once: true });
     document.addEventListener('touchstart', requestPushPermission, { once: true });
+}
+
+function sendPresenceHeartbeat(keepalive = false) {
+    if (!window.CURRENT_USER || !window.CURRENT_USER.id || presenceHeartbeatInProgress) return;
+    presenceHeartbeatInProgress = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    fetch('api/users/heartbeat.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        cache: 'no-store',
+        signal: controller.signal,
+        keepalive
+    }).then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }).then(result => {
+        if (!result || !result.success) throw new Error((result && result.message) || 'Heartbeat rejected');
+        const friends = result.data && Array.isArray(result.data.friends) ? result.data.friends : [];
+        friends.forEach(friend => updateUserStatusInUI(friend.id, friend.status, friend.last_seen));
+    }).catch(error => {
+        console.warn('[Presence] Heartbeat failed:', error.message || error);
+    }).finally(() => {
+        clearTimeout(timeoutId);
+        presenceHeartbeatInProgress = false;
+    });
+}
+
+function startPresenceHeartbeat() {
+    if (window._presenceHeartbeatStarted) return;
+    window._presenceHeartbeatStarted = true;
+    if (presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
+    sendPresenceHeartbeat();
+    presenceHeartbeatTimer = setInterval(() => sendPresenceHeartbeat(), 5000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) sendPresenceHeartbeat();
+    });
+    window.addEventListener('pageshow', () => sendPresenceHeartbeat());
+    window.addEventListener('pagehide', () => sendPresenceHeartbeat(true));
 }
 
 async function runAutoSyncHeartbeat() {
@@ -1120,6 +1295,7 @@ function updateConversationsListUI(conversations) {
         const friendId = parseInt(f.id);
         window.friendsCache = window.friendsCache || {};
         window.friendsCache[friendId] = f;
+        if (f.status) updateUserStatusInUI(friendId, f.status, f.last_seen);
     });
 
     const container = document.getElementById('middleListContainer');
@@ -1137,7 +1313,8 @@ function updateConversationsListUI(conversations) {
     }
 
     try {
-        if (conversations.length === 0) {
+        const chatConversations = conversations.filter(f => f.last_message_time || f.last_message || f.last_message_type);
+        if (chatConversations.length === 0) {
             if (!container.querySelector('.empty-state')) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1163,7 +1340,7 @@ function updateConversationsListUI(conversations) {
 
         const currentActiveFriendId = (window.chatManager && window.chatManager.activeFriend) ? parseInt(window.chatManager.activeFriend.id) : 0;
 
-        conversations.forEach(f => {
+        chatConversations.forEach(f => {
             const friendId = parseInt(f.id);
             const avatar = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(f.profile_image) : (f.profile_image || 'assets/images/default-avatar.png');
             const unreadCount = parseInt(f.unread_count) || 0;
@@ -1296,6 +1473,26 @@ function openProfileModal() {
 }
 window.openProfileModal = openProfileModal;
 
+function openContactProfile() {
+    const id = parseInt(window.activeFriendId || (window.chatManager && window.chatManager.activeFriend && window.chatManager.activeFriend.id), 10);
+    if (!id) return;
+    const friend = (window.friendsCache && window.friendsCache[id]) || {};
+    const active = window.chatManager && window.chatManager.activeFriend ? window.chatManager.activeFriend : {};
+    const name = friend.fullname || active.name || document.getElementById('chatHeaderName')?.textContent || 'Contact';
+    const avatar = friend.profile_image || active.avatar || document.getElementById('chatHeaderAvatar')?.src || 'assets/images/default-avatar.png';
+    const photo = document.getElementById('contactProfileAvatar');
+    const nameEl = document.getElementById('contactProfileName');
+    const phoneEl = document.getElementById('contactProfilePhone');
+    if (photo) {
+        photo.onerror = () => { photo.onerror = null; photo.src = 'assets/images/default-avatar.png'; };
+        photo.src = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(avatar) : avatar;
+    }
+    if (nameEl) nameEl.textContent = name;
+    if (phoneEl) phoneEl.textContent = friend.phone || active.phone || 'Phone number unavailable';
+    document.getElementById('contactProfileModal')?.classList.add('active');
+}
+window.openContactProfile = openContactProfile;
+
 function openSettingsModal() {
     const modal = document.getElementById('settingsModal');
     if (modal) modal.classList.add('active');
@@ -1304,6 +1501,10 @@ window.openSettingsModal = openSettingsModal;
 
 // Initialize only after every declaration and realtime handler in this file
 // has been evaluated. This guarantees polling state exists before startup.
+// Start presence outside the dashboard initializer so unrelated UI startup
+// failures cannot prevent the authenticated user's heartbeat from running.
+try { startPresenceHeartbeat(); } catch (e) { console.warn('[Presence] Could not start heartbeat:', e); }
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeDashboardApp, { once: true });
 } else {

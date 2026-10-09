@@ -17,6 +17,10 @@ if (!$currentUser) {
     exit;
 }
 
+// Mark the authenticated dashboard view online immediately, before relying on
+// JavaScript heartbeats to maintain presence while the page stays open.
+$userModel->updateStatus((int)$currentUser['id'], 'online');
+
 require_once __DIR__ . '/models/Friend.php';
 
 // Release session write lock early so parallel AJAX calls are never blocked
@@ -122,6 +126,31 @@ $userAvatar = $currentUser['profile_image'] ?
         function closeActiveChat() {
             const container = document.querySelector('.app-container');
             if (container) container.classList.remove('chat-open');
+
+            // openChatWith() forces these views visible with inline !important
+            // styles, so removing the mobile class alone cannot close a chat.
+            const activeChatView = document.getElementById('activeChatView');
+            if (activeChatView) activeChatView.style.setProperty('display', 'none', 'important');
+            const emptyState = document.getElementById('chatEmptyState');
+            if (emptyState) emptyState.style.removeProperty('display');
+            const mainStage = document.querySelector('.main-stage');
+            if (mainStage) mainStage.style.removeProperty('display');
+
+            window.activeFriendId = null;
+            if (window.chatManager) {
+                if (window.chatManager.conversationPollTimer) {
+                    clearInterval(window.chatManager.conversationPollTimer);
+                    window.chatManager.conversationPollTimer = null;
+                }
+                window.chatManager.activeFriend = null;
+            }
+
+            // Always return to the actual conversation list after leaving a chat.
+            if (typeof window.switchTab === 'function') {
+                window.switchTab('chats');
+            } else if (typeof window.loadChatsList === 'function') {
+                window.loadChatsList();
+            }
         }
         window.closeActiveChat = closeActiveChat;
 
@@ -180,7 +209,11 @@ $userAvatar = $currentUser['profile_image'] ?
             const statusEl = document.getElementById('chatHeaderStatus');
             if (statusEl) {
                 statusEl.className = 'chat-header-status ' + status;
-                statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> ' + (status === 'online' ? 'Online' : 'Offline');
+                const lastSeen = window.friendsCache && window.friendsCache[id] ? window.friendsCache[id].last_seen : '';
+                const presenceLabel = typeof window.formatPresenceLabel === 'function'
+                    ? window.formatPresenceLabel(status, lastSeen)
+                    : (status === 'online' ? 'Online' : 'Offline');
+                statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> ' + presenceLabel;
             }
 
             // 4. Highlight active list item
@@ -394,12 +427,18 @@ $userAvatar = $currentUser['profile_image'] ?
             <div class="middle-header">
                 <h2 class="middle-title" id="middlePanelTitle">Chats</h2>
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <button class="btn-icon" id="btnRefreshList" title="Refresh" onclick="refreshCurrentTab()">
+                    <button type="button" class="btn-icon" id="btnRefreshList" title="Refresh application" aria-label="Refresh application" onclick="window.location.reload()">
                         <i class="fas fa-redo-alt" style="font-size:14px;"></i>
                     </button>
                     <button class="btn-icon" title="New Chat / Find Friend" onclick="switchTab('friends')">
                         <i class="fas fa-user-plus" style="font-size:14px;"></i>
                     </button>
+                    <button type="button" class="btn-icon" data-theme-toggle title="Toggle Light/Dark Theme" aria-label="Toggle Light/Dark Theme" onclick="toggleAppTheme()">
+                        <i class="fas fa-moon" style="font-size:14px;"></i>
+                    </button>
+                    <a class="btn-icon" href="logout.php" title="Logout" aria-label="Logout" style="color:var(--danger);">
+                        <i class="fas fa-sign-out-alt" style="font-size:14px;"></i>
+                    </a>
                 </div>
             </div>
 
@@ -480,10 +519,11 @@ $userAvatar = $currentUser['profile_image'] ?
                         <button class="btn-icon chat-back-btn" id="chatBackBtn" title="Back to Chats" onclick="closeActiveChat()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
-                        <div class="avatar avatar-md">
+                        <button type="button" class="avatar avatar-md chat-profile-trigger" aria-label="View contact profile" onclick="openContactProfile()">
                             <img id="chatHeaderAvatar" src="assets/images/default-avatar.png" alt="Friend" onerror="this.src='assets/images/default-avatar.png'">
-                        </div>
-                        <div class="chat-header-info">
+                            <span class="status-dot offline" id="chatHeaderStatusDot" aria-label="Offline"></span>
+                        </button>
+                        <div class="chat-header-info chat-profile-trigger" role="button" tabindex="0" onclick="openContactProfile()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openContactProfile();}">
                             <span class="chat-header-name" id="chatHeaderName">Conversation</span>
                             <span class="chat-header-status offline" id="chatHeaderStatus">
                                 <i class="fas fa-circle" style="font-size:8px;"></i> Offline
@@ -499,13 +539,12 @@ $userAvatar = $currentUser['profile_image'] ?
                             <i class="fas fa-video"></i>
                         </button>
                         <div style="position:relative;">
-                            <button class="btn-icon" id="btnChatMoreMenu" title="More options" onclick="document.getElementById('chatMoreDropdown').classList.toggle('active')">
+                            <button class="btn-icon" id="btnChatMoreMenu" title="More options" onclick="toggleChatMoreMenu()">
                                 <i class="fas fa-ellipsis-v"></i>
                             </button>
                             <!-- Dropdown options -->
                             <div id="chatMoreDropdown" class="attachment-popover" style="right:0;left:auto;top:44px;bottom:auto;">
-                                <div class="attachment-item" onclick="openProfileModal()"><i class="fas fa-user"></i> View Profile</div>
-                                <div class="attachment-item" onclick="openBlockModal()"><i class="fas fa-ban" style="color:var(--danger);"></i> Block User</div>
+                                <div class="attachment-item" id="chatBlockMenuItem" onclick="openBlockModal()"><i class="fas fa-ban" style="color:var(--danger);"></i> <span id="chatBlockMenuLabel">Block User</span></div>
                                 <div class="attachment-item" onclick="openReportModal()"><i class="fas fa-flag" style="color:var(--warning);"></i> Report User</div>
                             </div>
                         </div>
@@ -729,6 +768,21 @@ $userAvatar = $currentUser['profile_image'] ?
         </div>
     </div>
 
+    <!-- Contact Profile Modal -->
+    <div class="modal-overlay" id="contactProfileModal" onclick="if(event.target===this)this.classList.remove('active')">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="contactProfileName">
+            <div class="modal-header">
+                <h3>Contact profile</h3>
+                <button type="button" class="btn-icon btn-sm" aria-label="Close" onclick="document.getElementById('contactProfileModal').classList.remove('active')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="text-align:center;padding:26px 22px;">
+                <img id="contactProfileAvatar" src="assets/images/default-avatar.png" alt="Contact photo" style="width:104px;height:104px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);">
+                <h2 id="contactProfileName" style="margin:14px 0 18px;color:var(--text-primary);"></h2>
+                <div style="color:var(--text-secondary);"><i class="fas fa-phone-alt" style="margin-right:8px;color:var(--primary);"></i><span id="contactProfilePhone"></span></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Profile Modal -->
     <div class="modal-overlay" id="profileEditModal">
         <div class="modal-card">
@@ -814,10 +868,10 @@ $userAvatar = $currentUser['profile_image'] ?
     <div class="modal-overlay" id="blockUserModal">
         <div class="modal-card" style="max-width:380px;">
             <div class="modal-header">
-                <h3>Block User?</h3>
+                <h3 id="blockUserModalTitle">Block User?</h3>
             </div>
             <div class="modal-body">
-                Blocked users cannot send you messages, friend requests, or initiate calls.
+                <span id="blockUserModalText">Blocked users cannot send you messages, friend requests, or initiate calls.</span>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline btn-sm" onclick="document.getElementById('blockUserModal').classList.remove('active')">Cancel</button>
@@ -932,23 +986,71 @@ $userAvatar = $currentUser['profile_image'] ?
             }
         }
 
+        window.activeChatUserBlocked = false;
+        async function toggleChatMoreMenu() {
+            const dropdown = document.getElementById('chatMoreDropdown');
+            if (!dropdown) return;
+            const opening = !dropdown.classList.contains('active');
+            dropdown.classList.toggle('active');
+            if (!opening) return;
+            const userId = window.activeFriendId || (window.chatManager && window.chatManager.activeFriend && window.chatManager.activeFriend.id);
+            if (!userId) return;
+            try {
+                const response = await fetch(`api/users/profile.php?id=${encodeURIComponent(userId)}`, { cache: 'no-store' });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Could not load block status.');
+                window.activeChatUserBlocked = !!(result.data && result.data.is_blocked);
+                const label = document.getElementById('chatBlockMenuLabel');
+                const icon = document.querySelector('#chatBlockMenuItem i');
+                if (label) label.textContent = window.activeChatUserBlocked ? 'Unblock User' : 'Block User';
+                if (icon) icon.className = window.activeChatUserBlocked ? 'fas fa-unlock' : 'fas fa-ban';
+            } catch (error) {
+                console.error('[Block status]', error);
+            }
+        }
+
         function openBlockModal() {
-            document.getElementById('chatMoreDropdown').classList.remove('active');
+            document.getElementById('chatMoreDropdown')?.classList.remove('active');
             const m = document.getElementById('blockUserModal');
+            const blocked = !!window.activeChatUserBlocked;
+            const title = document.getElementById('blockUserModalTitle');
+            const text = document.getElementById('blockUserModalText');
+            const confirm = document.getElementById('btnConfirmBlock');
+            if (title) title.textContent = blocked ? 'Unblock User?' : 'Block User?';
+            if (text) text.textContent = blocked
+                ? 'This user will be able to send you messages, friend requests, and calls again.'
+                : 'Blocked users cannot send you messages, friend requests, or initiate calls.';
+            if (confirm) {
+                confirm.textContent = blocked ? 'Unblock' : 'Block';
+                confirm.classList.toggle('btn-danger', !blocked);
+                confirm.classList.toggle('btn-primary', blocked);
+                confirm.onclick = async () => {
+                    const targetId = window.activeFriendId || (window.chatManager && window.chatManager.activeFriend && window.chatManager.activeFriend.id);
+                    if (!targetId) return;
+                    confirm.disabled = true;
+                    try {
+                        const action = blocked ? 'unblock' : 'block';
+                        const res = await fetch('api/users/block.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ target_id: targetId, action })
+                        });
+                        const data = await res.json();
+                        showToast(data.message, data.success ? 'success' : 'error');
+                        if (data.success) {
+                            window.activeChatUserBlocked = !blocked;
+                            const label = document.getElementById('chatBlockMenuLabel');
+                            if (label) label.textContent = window.activeChatUserBlocked ? 'Unblock User' : 'Block User';
+                            m?.classList.remove('active');
+                        }
+                    } catch (error) {
+                        showToast('Could not update block status. Please try again.', 'error');
+                    } finally {
+                        confirm.disabled = false;
+                    }
+                };
+            }
             if (m) m.classList.add('active');
-            document.getElementById('btnConfirmBlock').onclick = async () => {
-                if (window.chatManager && window.chatManager.activeFriend) {
-                    const res = await fetch('api/users/block.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ target_id: window.chatManager.activeFriend.id, action: 'block' })
-                    });
-                    const data = await res.json();
-                    showToast(data.message, data.success ? 'success' : 'error');
-                    m.classList.remove('active');
-                    setTimeout(() => window.location.reload(), 1000);
-                }
-            };
         }
 
         function openReportModal() {

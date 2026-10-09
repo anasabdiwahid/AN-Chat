@@ -175,6 +175,32 @@
     user-select: none;
 }
 
+.friends-section-header,
+.friends-search-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.friends-section-title,
+.friends-search-header strong {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.friends-section-title span {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
 .list-item:hover {
     background-color: var(--surface-hover);
 }
@@ -246,12 +272,13 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
+    height: 96px;
     background: var(--surface);
     border-top: 1px solid var(--border);
-    z-index: 900;
+    z-index: 9998;
     justify-content: space-around;
     align-items: center;
+    pointer-events: auto;
 }
 
 .bottom-nav-item {
@@ -264,8 +291,21 @@
     font-size: 10px;
     font-weight: 600;
     width: 20%;
-    height: 100%;
+    height: 72px;
     position: relative;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translateY(-6px);
+}
+
+.chat-profile-trigger {
+    cursor: pointer;
+}
+
+.chat-profile-trigger:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+    border-radius: 8px;
 }
 
 .bottom-nav-item svg,
@@ -284,4 +324,3 @@
     font-size: 9px;
     padding: 1px 4px;
 }
-

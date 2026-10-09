@@ -11,7 +11,7 @@
 
     .middle-panel {
         width: 100%;
-        height: calc(100% - 60px); /* Leave room for bottom nav */
+        height: calc(100% - 96px); /* Leave room for bottom nav */
     }
 
     .main-stage {
@@ -102,4 +102,3 @@
         width: 420px;
     }
 }
-

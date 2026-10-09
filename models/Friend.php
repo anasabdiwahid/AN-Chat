@@ -155,7 +155,13 @@ class Friend {
     public function getFriendsList(int $userId): array {
         try {
             $stmt = $this->db->prepare("
-                SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio, u.status, u.last_seen,
+                SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio,
+                       CASE
+                           WHEN u.status = 'away' THEN 'away'
+                           WHEN u.last_seen >= DATE_SUB(NOW(), INTERVAL 60 SECOND) THEN 'online'
+                           ELSE 'offline'
+                       END AS status,
+                       u.last_seen,
                        f.created_at AS friendship_date,
                        (
                            SELECT m.message 
@@ -221,4 +227,3 @@ class Friend {
         return $stmt->fetchAll();
     }
 }
-

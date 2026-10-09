@@ -181,15 +181,17 @@ class ChatManager {
     async openConversation(friendId, friendName, friendAvatar, friendStatus) {
         if (!friendId) return;
         friendId = parseInt(friendId);
+        let friendLastSeen = '';
         if (this.conversationPollTimer) clearInterval(this.conversationPollTimer);
         this.conversationPollTimer = null;
 
         // Auto lookup from cache if friendName or avatar missing
-        if ((!friendName || !friendAvatar) && window.friendsCache && window.friendsCache[friendId]) {
+        if (window.friendsCache && window.friendsCache[friendId]) {
             const cached = window.friendsCache[friendId];
             friendName = friendName || cached.fullname;
             friendAvatar = friendAvatar || cached.profile_image;
             friendStatus = friendStatus || cached.status;
+            friendLastSeen = cached.last_seen || '';
         }
 
         friendName = friendName || 'Conversation';
@@ -200,7 +202,8 @@ class ChatManager {
             id: friendId,
             name: friendName,
             avatar: friendAvatar,
-            status: friendStatus
+            status: friendStatus,
+            phone: (window.friendsCache && window.friendsCache[friendId] && window.friendsCache[friendId].phone) || ''
         };
 
         // 1. Immediately toggle Active Chat UI and hide Empty State
@@ -221,9 +224,17 @@ class ChatManager {
         if (nameEl) nameEl.textContent = friendName;
 
         const statusEl = document.getElementById('chatHeaderStatus');
+        const headerDot = document.getElementById('chatHeaderStatusDot');
+        if (headerDot) {
+            headerDot.className = `status-dot ${friendStatus}`;
+            headerDot.setAttribute('aria-label', friendStatus);
+        }
         if (statusEl) {
             statusEl.className = `chat-header-status ${friendStatus}`;
-            statusEl.innerHTML = `<i class="fas fa-circle" style="font-size:8px;"></i> ${friendStatus === 'online' ? 'Online' : 'Offline'}`;
+            const presenceLabel = typeof window.formatPresenceLabel === 'function'
+                ? window.formatPresenceLabel(friendStatus, friendLastSeen)
+                : (friendStatus === 'online' ? 'Online' : 'Offline');
+            statusEl.innerHTML = `<i class="fas fa-circle" style="font-size:8px;"></i> ${presenceLabel}`;
         }
 
         const headerAvatar = document.getElementById('chatHeaderAvatar');
