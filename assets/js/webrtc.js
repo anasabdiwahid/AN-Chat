@@ -21,6 +21,9 @@ class WebRTCManager {
         this.ringingTimeout = null;
         this.disconnectTimeout = null;
         this.mediaWarningTimeout = null;
+        this.audioContext = null;
+        this.audioOutputUnlocked = false;
+        this.remoteAudioSource = null;
 
         const configuredIceServers = Array.isArray(window.WEBRTC_ICE_SERVERS) ? window.WEBRTC_ICE_SERVERS : [];
         const fallbackStunServers = [
@@ -43,6 +46,46 @@ class WebRTCManager {
             } catch (e) {
                 console.warn('[WebRTC] WS send error:', e);
             }
+        }
+    }
+
+    // iOS Safari requires audio playback to be unlocked during a real user
+    // gesture. Accept can wait for SDP, so unlock immediately on the tap.
+    unlockAudioOutput() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return Promise.resolve(false);
+        try {
+            if (!this.audioContext || this.audioContext.state === 'closed') {
+                this.audioContext = new AudioContextClass();
+            }
+            if (this.audioContext.state === 'suspended') {
+                return this.audioContext.resume().then(() => {
+                    this.primeAudioOutput();
+                    return this.audioContext.state === 'running';
+                }).catch(error => {
+                    console.warn('[WebRTC] Could not unlock audio output:', error);
+                    return false;
+                });
+            }
+            this.primeAudioOutput();
+            return Promise.resolve(this.audioContext.state === 'running');
+        } catch (error) {
+            console.warn('[WebRTC] Audio output unlock failed:', error);
+            return Promise.resolve(false);
+        }
+    }
+
+    primeAudioOutput() {
+        if (this.audioOutputUnlocked || !this.audioContext || this.audioContext.state !== 'running') return;
+        try {
+            const silentBuffer = this.audioContext.createBuffer(1, 1, this.audioContext.sampleRate);
+            const silentSource = this.audioContext.createBufferSource();
+            silentSource.buffer = silentBuffer;
+            silentSource.connect(this.audioContext.destination);
+            silentSource.start(0);
+            this.audioOutputUnlocked = true;
+        } catch (error) {
+            console.warn('[WebRTC] Could not prime audio output:', error);
         }
     }
 
@@ -255,7 +298,8 @@ class WebRTCManager {
 
         // Remote track received -> Attach to Audio and/or Video elements
         this.peerConnection.ontrack = (event) => {
-            console.log('[WebRTC] Received remote track', event.streams[0]);
+            console.log('[WebRTC] Received remote track:', event.track.kind, event.track.readyState);
+            event.track.onunmute = () => console.info('[WebRTC] Remote track is now unmuted:', event.track.kind);
             this.remoteStream = event.streams && event.streams[0]
                 ? event.streams[0]
                 : (this.remoteStream || new MediaStream());
@@ -277,11 +321,26 @@ class WebRTCManager {
                 remoteAudio.muted = false;
                 remoteAudio.volume = 1;
                 remoteAudio.srcObject = this.remoteStream;
-                remoteAudio.play().catch(e => {
-                    console.warn('[WebRTC] remoteAudio autoplay was blocked:', e);
-                    if (typeof showToast === 'function') showToast('Codka maqalka u taabo shaashadda hal mar.', 'info');
-                    document.addEventListener('pointerdown', () => remoteAudio.play().catch(() => {}), { once: true });
-                });
+                const audioTracks = this.remoteStream.getAudioTracks();
+                let audioContextPlaying = false;
+                if (audioTracks.length && this.audioContext && this.audioContext.state !== 'closed') {
+                    if (this.audioContext.state === 'suspended') this.audioContext.resume().catch(() => {});
+                    if (this.audioContext.state === 'running') {
+                        if (!this.remoteAudioSource) {
+                            const audioOnlyStream = new MediaStream(audioTracks);
+                            this.remoteAudioSource = this.audioContext.createMediaStreamSource(audioOnlyStream);
+                            this.remoteAudioSource.connect(this.audioContext.destination);
+                        }
+                        audioContextPlaying = true;
+                    }
+                }
+                if (!audioContextPlaying) {
+                    remoteAudio.play().catch(e => {
+                        console.warn('[WebRTC] remoteAudio autoplay was blocked:', e);
+                        if (typeof showToast === 'function') showToast('Codka maqalka u taabo shaashadda hal mar.', 'info');
+                        document.addEventListener('pointerdown', () => remoteAudio.play().catch(() => {}), { once: true });
+                    });
+                }
             } catch (err) {}
 
             // 2. Video output (if video call)
@@ -290,7 +349,12 @@ class WebRTCManager {
                 try {
                     remoteVideo.muted = true; // Audio is played through remoteAudio, avoiding autoplay/mixed-audio issues.
                     remoteVideo.srcObject = this.remoteStream;
-                    remoteVideo.play().catch(e => console.warn('[WebRTC] remoteVideo autoplay:', e));
+                    remoteVideo.onloadedmetadata = () => console.info('[WebRTC] Remote video metadata loaded:', remoteVideo.videoWidth, remoteVideo.videoHeight);
+                    remoteVideo.onplaying = () => console.info('[WebRTC] Remote video is playing.');
+                    remoteVideo.play().catch(e => {
+                        console.warn('[WebRTC] remoteVideo autoplay:', e);
+                        if (typeof showToast === 'function') showToast('Muuqaalka qofka kale lama bilaabi karin. Taabo shaashadda mar kale.', 'info');
+                    });
                 } catch (err) {}
             }
         };
@@ -568,6 +632,11 @@ class WebRTCManager {
         if (this.peerConnection) {
             try { this.peerConnection.close(); } catch (e) {}
             this.peerConnection = null;
+        }
+
+        if (this.remoteAudioSource) {
+            try { this.remoteAudioSource.disconnect(); } catch (e) {}
+            this.remoteAudioSource = null;
         }
 
         if (this.localStream) {

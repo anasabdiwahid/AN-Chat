@@ -735,7 +735,7 @@ $userAvatar = $currentUser['profile_image'] ?
 
         <!-- C. Active Video Call Screen -->
         <div class="active-video-container" id="activeVideoBox" style="display:none;">
-            <video id="remoteVideo" autoplay playsinline></video>
+            <video id="remoteVideo" autoplay playsinline muted webkit-playsinline></video>
             <div class="pip-video-box">
                 <video id="localVideo" autoplay playsinline muted></video>
             </div>

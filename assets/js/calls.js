@@ -28,6 +28,14 @@ class CallController {
         const btnAccept = document.getElementById('btnAcceptCall');
         if (btnAccept) {
             btnAccept.type = 'button';
+            const unlockCallAudio = () => {
+                if (!window.webrtc && typeof WebRTCManager === 'function') {
+                    window.webrtc = new WebRTCManager(window.wsClient || null);
+                }
+                if (window.webrtc) window.webrtc.unlockAudioOutput();
+            };
+            btnAccept.addEventListener('pointerdown', unlockCallAudio, { passive: true });
+            btnAccept.addEventListener('click', unlockCallAudio);
         }
 
         // Decline Incoming Call
@@ -597,6 +605,7 @@ window.startCallWith = function(peerId, peerName, peerAvatar, callType = 'voice'
     } else if (window.webrtc && window.wsClient) {
         window.webrtc.ws = window.wsClient;
     }
+    if (window.webrtc) window.webrtc.unlockAudioOutput();
 
     // 1. Show dialing overlay with ringback tone
     if (window.callController) {
