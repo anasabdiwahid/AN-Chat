@@ -321,6 +321,8 @@
 
 /* Bottom Chat Input Bar */
 .chat-input-bar {
+    width: 100%;
+    min-width: 0;
     background: var(--surface);
     border-top: 1px solid var(--border);
     padding: 10px 16px max(10px, env(safe-area-inset-bottom));
@@ -333,7 +335,10 @@
 
 .message-composer {
     width: 100%;
-    max-width: 760px;
+    min-width: 0;
+    max-width: min(760px, 100%);
+    flex: 1 1 100%;
+    box-sizing: border-box;
     margin: 0 auto;
     padding: 10px 14px 8px;
     border: 1px solid rgba(93, 190, 221, .65);
@@ -346,6 +351,8 @@
 .chat-input-field {
     display: block;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 38px;
     max-height: 120px;
     padding: 4px 6px 8px;
@@ -378,6 +385,8 @@
 .message-composer-right-tools {
     display: flex;
     align-items: center;
+    min-width: 0;
+    flex-wrap: nowrap;
 }
 
 .message-composer-tools {
@@ -409,6 +418,7 @@
     color: rgba(255, 255, 255, .88);
     font-size: 14px;
     cursor: pointer;
+    flex: 0 0 auto;
     outline: none;
     transition: var(--transition);
 }
@@ -491,6 +501,7 @@
     box-shadow: 0 3px 10px rgba(34, 197, 94, .35);
     transition: var(--transition);
     flex-shrink: 0;
+    flex: 0 0 auto;
 }
 
 .send-btn:hover {
@@ -504,7 +515,7 @@
 
 @media (max-width: 600px) {
     .chat-input-bar {
-        padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+        padding: 8px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
     }
     .message-composer {
         padding: 8px 10px 6px;
@@ -512,7 +523,7 @@
     }
     .chat-input-field {
         min-height: 36px;
-        font-size: 14px;
+        font-size: 16px; /* Prevent iOS Safari from zooming the page on input focus. */
     }
     .composer-tool-btn {
         min-width: 30px;
@@ -637,4 +648,3 @@
     color: var(--text-secondary);
     margin-left: 4px;
 }
-

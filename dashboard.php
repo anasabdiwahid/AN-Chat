@@ -49,12 +49,29 @@ $userAvatar = $currentUser['profile_image'] ?
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>A/N Chat — Connect. Chat. Call. Share.</title>
     <link rel="icon" type="image/png" href="assets/icons/favicon.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
     <link rel="manifest" href="pwa/manifest.json">
     <meta name="theme-color" content="#E91E63">
+    <script>
+        (function () {
+            const root = document.documentElement;
+            const syncViewport = () => {
+                const viewport = window.visualViewport;
+                root.style.setProperty('--app-viewport-height', `${Math.round(viewport ? viewport.height : window.innerHeight)}px`);
+                root.style.setProperty('--app-viewport-top', `${Math.round(viewport ? viewport.offsetTop : 0)}px`);
+            };
+            syncViewport();
+            window.addEventListener('resize', syncViewport, { passive: true });
+            window.addEventListener('orientationchange', syncViewport, { passive: true });
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', syncViewport, { passive: true });
+                window.visualViewport.addEventListener('scroll', syncViewport, { passive: true });
+            }
+        })();
+    </script>
 
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
