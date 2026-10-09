@@ -226,9 +226,8 @@ class CallController {
             if (window.webrtc) {
                 await window.webrtc.handleIncomingOffer(payload);
                 if (this.statusTextEl) {
-                    this.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+                    this.statusTextEl.textContent = 'Connecting media...';
                 }
-                this.startCallTimer();
             } else {
                 throw new Error('WebRTC is unavailable in this browser.');
             }
@@ -272,7 +271,7 @@ class CallController {
                 }
             }
             if (this.statusTextEl) {
-                this.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+                this.statusTextEl.textContent = 'Connecting media...';
             }
             if (this.callTimerEl) {
                 this.callTimerEl.style.display = 'inline-block';

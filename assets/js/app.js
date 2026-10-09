@@ -269,7 +269,6 @@ class WebSocketClient {
                 if (window.callController) {
                     const cType = (window.webrtc && window.webrtc.callType) ? window.webrtc.callType : 'voice';
                     window.callController.showActiveCallScreen(cType);
-                    window.callController.startCallTimer();
                 }
                 break;
 
@@ -292,7 +291,6 @@ class WebSocketClient {
                     if (window.callController) {
                         const cType = (window.webrtc && window.webrtc.callType) ? window.webrtc.callType : 'voice';
                         window.callController.showActiveCallScreen(cType);
-                        window.callController.startCallTimer();
                     }
                 } else if (data.status === 'declined' || data.status === 'ended') {
                     if (window.callController) {

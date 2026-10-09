@@ -581,44 +581,49 @@ $userAvatar = $currentUser['profile_image'] ?
 
                 <!-- Bottom Input Bar -->
                 <footer class="chat-input-bar">
-                    <!-- Emojis & Quick reactions -->
-                    <button class="btn-icon" id="btnEmojiToggle" title="Emojis" onclick="toggleEmojiPicker(this)">
-                        <i class="far fa-smile" style="font-size:20px;"></i>
-                    </button>
-
-                    <!-- Attachment button & Popover -->
-                    <div style="position:relative;">
-                        <button class="btn-icon" id="btnAttachmentToggle" title="Attach file">
-                            <i class="fas fa-paperclip" style="font-size:18px;"></i>
-                        </button>
-                        <div class="attachment-popover" id="attachmentPopover">
-                            <label class="attachment-item" for="attachImageInput">
-                                <i class="fas fa-image" style="color:#E91E63;"></i> Photos & Images
-                            </label>
-                            <label class="attachment-item" for="attachVideoInput">
-                                <i class="fas fa-video" style="color:#9C27B0;"></i> Video File
-                            </label>
-                            <label class="attachment-item" for="attachDocInput">
-                                <i class="fas fa-file-alt" style="color:#2196F3;"></i> Document (PDF, DOC)
-                            </label>
-                            <input type="file" id="attachImageInput" accept="image/*" style="display:none;">
-                            <input type="file" id="attachVideoInput" accept="video/*" style="display:none;">
-                            <input type="file" id="attachDocInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" style="display:none;">
+                    <div class="message-composer">
+                        <textarea id="chatInputField" class="chat-input-field" placeholder="Type a message..." rows="1" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendChatMessage(); }"></textarea>
+                        <div class="message-composer-tools">
+                            <div class="message-composer-left-tools">
+                                <div class="composer-emoji-wrap">
+                                    <button type="button" class="composer-tool-btn" id="btnEmojiToggle" title="Emojis" onclick="toggleEmojiPicker(this)"><i class="far fa-smile"></i></button>
+                                    <div id="emojiPickerPopover" class="attachment-popover emoji-popover">
+                                        <span class="reaction-opt" onclick="insertEmoji('😊')">😊</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('👋')">👋</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('❤️')">❤️</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('😂')">😂</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('👍')">👍</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('🔥')">🔥</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('😍')">😍</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('🎉')">🎉</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('🙏')">🙏</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('😢')">😢</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('😎')">😎</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('✨')">✨</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('👏')">👏</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('💯')">💯</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('🤝')">🤝</span>
+                                        <span class="reaction-opt" onclick="insertEmoji('🌹')">🌹</span>
+                                    </div>
+                                </div>
+                                <div class="composer-attachment-wrap">
+                                    <button type="button" class="composer-tool-btn" id="btnAttachmentToggle" title="Attach file"><i class="fas fa-paperclip"></i></button>
+                                    <div class="attachment-popover" id="attachmentPopover">
+                                        <label class="attachment-item" for="attachImageInput"><i class="fas fa-image" style="color:#E91E63;"></i> Photos & Images</label>
+                                        <label class="attachment-item" for="attachVideoInput"><i class="fas fa-video" style="color:#9C27B0;"></i> Video File</label>
+                                        <label class="attachment-item" for="attachDocInput"><i class="fas fa-file-alt" style="color:#2196F3;"></i> Document (PDF, DOC)</label>
+                                        <input type="file" id="attachImageInput" accept="image/*" style="display:none;">
+                                        <input type="file" id="attachVideoInput" accept="video/*" style="display:none;">
+                                        <input type="file" id="attachDocInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" style="display:none;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="message-composer-right-tools">
+                                <button type="button" class="composer-tool-btn composer-voice-btn" id="btnVoiceRecord" title="Record Voice Message"><i class="fas fa-microphone"></i></button>
+                                <button type="button" class="send-btn" id="btnSendMessage" title="Send Message" aria-label="Send message" onclick="sendChatMessage();"><i class="fas fa-arrow-up"></i></button>
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Message Textarea -->
-                    <textarea id="chatInputField" class="chat-input-field" placeholder="Type a message..." rows="1" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendChatMessage(); }"></textarea>
-
-                    <!-- Voice Record Mic -->
-                    <button class="btn-icon" id="btnVoiceRecord" title="Record Voice Message" style="color:var(--primary);">
-                        <i class="fas fa-microphone" style="font-size:19px;"></i>
-                    </button>
-
-                    <!-- Send Button (Pink) -->
-                    <button class="send-btn" id="btnSendMessage" title="Send Message" onclick="sendChatMessage();">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
                 </footer>
             </div>
         </main>
@@ -904,22 +909,6 @@ $userAvatar = $currentUser['profile_image'] ?
         </div>
     </div>
 
-    <!-- Emoji Popover -->
-    <div id="emojiPickerPopover" class="attachment-popover" style="display:none;bottom:64px;left:16px;max-width:280px;flex-direction:row;flex-wrap:wrap;padding:12px;gap:8px;">
-        <span class="reaction-opt" onclick="insertEmoji('😊')">😊</span>
-        <span class="reaction-opt" onclick="insertEmoji('👋')">👋</span>
-        <span class="reaction-opt" onclick="insertEmoji('❤️')">❤️</span>
-        <span class="reaction-opt" onclick="insertEmoji('😂')">😂</span>
-        <span class="reaction-opt" onclick="insertEmoji('👍')">👍</span>
-        <span class="reaction-opt" onclick="insertEmoji('🔥')">🔥</span>
-        <span class="reaction-opt" onclick="insertEmoji('😍')">😍</span>
-        <span class="reaction-opt" onclick="insertEmoji('🎉')">🎉</span>
-        <span class="reaction-opt" onclick="insertEmoji('🙏')">🙏</span>
-        <span class="reaction-opt" onclick="insertEmoji('😢')">😢</span>
-        <span class="reaction-opt" onclick="insertEmoji('😎')">😎</span>
-        <span class="reaction-opt" onclick="insertEmoji('✨')">✨</span>
-    </div>
-
     <!-- Toast Notification Container -->
     <div id="toast-container"></div>
 
@@ -966,10 +955,12 @@ $userAvatar = $currentUser['profile_image'] ?
         }
 
         function toggleEmojiPicker(btn) {
+            if (window.event) window.event.stopPropagation();
             const p = document.getElementById('emojiPickerPopover');
+            const attachP = document.getElementById('attachmentPopover');
+            if (attachP) attachP.classList.remove('active');
             if (p) {
                 p.classList.toggle('active');
-                p.style.display = p.classList.contains('active') ? 'flex' : 'none';
             }
         }
 
@@ -978,13 +969,25 @@ $userAvatar = $currentUser['profile_image'] ?
             if (input) {
                 input.value += char;
                 input.focus();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
             }
             const p = document.getElementById('emojiPickerPopover');
             if (p) {
                 p.classList.remove('active');
-                p.style.display = 'none';
             }
         }
+
+        // Close popovers on outside click
+        document.addEventListener('click', (e) => {
+            const emojiP = document.getElementById('emojiPickerPopover');
+            if (emojiP && !emojiP.contains(e.target) && !e.target.closest('#btnEmojiToggle')) {
+                emojiP.classList.remove('active');
+            }
+            const attachP = document.getElementById('attachmentPopover');
+            if (attachP && !attachP.contains(e.target) && !e.target.closest('#btnAttachmentToggle')) {
+                attachP.classList.remove('active');
+            }
+        });
 
         window.activeChatUserBlocked = false;
         async function toggleChatMoreMenu() {

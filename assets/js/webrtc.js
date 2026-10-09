@@ -18,12 +18,14 @@ class WebRTCManager {
         this.lastSignalId = 0;
         this.signalPollInProgress = false;
         this.ringingTimeout = null;
+        this.disconnectTimeout = null;
 
         this.iceConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
+                { urls: 'stun:stun2.l.google.com:19302' },
+                ...(Array.isArray(window.WEBRTC_TURN_SERVERS) ? window.WEBRTC_TURN_SERVERS : [])
             ]
         };
     }
@@ -134,9 +136,7 @@ class WebRTCManager {
                 const data = await res.json();
                 if (data && data.success && data.data) {
                     const status = data.data.status;
-                    if (status === 'answered' && !this.callConnected) {
-                        this.markCallConnected();
-                    } else if (status === 'declined' || status === 'missed' || status === 'ended') {
+                    if (status === 'declined' || status === 'missed' || status === 'ended') {
                         this.stopStatusPolling();
                         if (window.callController) {
                             window.callController.hideCallOverlay();
@@ -237,7 +237,10 @@ class WebRTCManager {
         // Remote track received -> Attach to Audio and/or Video elements
         this.peerConnection.ontrack = (event) => {
             console.log('[WebRTC] Received remote track', event.streams[0]);
-            this.remoteStream = event.streams[0];
+            this.remoteStream = event.streams && event.streams[0]
+                ? event.streams[0]
+                : (this.remoteStream || new MediaStream());
+            if (!event.streams || !event.streams[0]) this.remoteStream.addTrack(event.track);
 
             // 1. Voice audio output
             let remoteAudio = document.getElementById('remoteAudio');
@@ -255,13 +258,18 @@ class WebRTCManager {
                 remoteAudio.muted = false;
                 remoteAudio.volume = 1;
                 remoteAudio.srcObject = this.remoteStream;
-                remoteAudio.play().catch(e => console.warn('[WebRTC] remoteAudio autoplay:', e));
+                remoteAudio.play().catch(e => {
+                    console.warn('[WebRTC] remoteAudio autoplay was blocked:', e);
+                    if (typeof showToast === 'function') showToast('Codka maqalka u taabo shaashadda hal mar.', 'info');
+                    document.addEventListener('pointerdown', () => remoteAudio.play().catch(() => {}), { once: true });
+                });
             } catch (err) {}
 
             // 2. Video output (if video call)
             const remoteVideo = document.getElementById('remoteVideo');
             if (remoteVideo) {
                 try {
+                    remoteVideo.muted = true; // Audio is played through remoteAudio, avoiding autoplay/mixed-audio issues.
                     remoteVideo.srcObject = this.remoteStream;
                     remoteVideo.play().catch(e => console.warn('[WebRTC] remoteVideo autoplay:', e));
                 } catch (err) {}
@@ -282,9 +290,24 @@ class WebRTCManager {
         };
 
         this.peerConnection.oniceconnectionstatechange = () => {
-            console.log('[WebRTC] ICE Connection State:', this.peerConnection.iceConnectionState);
-            if (this.peerConnection.iceConnectionState === 'disconnected' || this.peerConnection.iceConnectionState === 'failed') {
+            const state = this.peerConnection.iceConnectionState;
+            console.log('[WebRTC] ICE Connection State:', state);
+            if (state === 'connected' || state === 'completed') {
+                clearTimeout(this.disconnectTimeout);
+                this.disconnectTimeout = null;
+                this.markCallConnected();
+            } else if (state === 'disconnected') {
+                clearTimeout(this.disconnectTimeout);
+                this.disconnectTimeout = setTimeout(() => {
+                    if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+                        this.endCall('ended');
+                        if (window.callController) window.callController.hideCallOverlay();
+                    }
+                }, 10000);
+            } else if (state === 'failed') {
+                if (typeof showToast === 'function') showToast('Shabakadu ma xiri karin codka/muuqaalka. Hubi internet-ka iyo oggolaanshaha mic/camera.', 'error');
                 this.endCall('ended');
+                if (window.callController) window.callController.hideCallOverlay();
             }
         };
     }
@@ -341,7 +364,6 @@ class WebRTCManager {
         await this.peerConnection.setLocalDescription(answer);
 
         await this.sendCallSignal('answer', { sdp: this.peerConnection.localDescription });
-        this.callConnected = true;
         await fetch('api/calls/update.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -362,7 +384,6 @@ class WebRTCManager {
         try {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             await this.drainPendingIceCandidates();
-            this.markCallConnected();
             return true;
         } catch (e) {
             console.warn('[WebRTC] Answer setRemoteDescription error:', e);
@@ -383,6 +404,10 @@ class WebRTCManager {
             window.callController.showActiveCallScreen(this.callType);
             if (window.callController.statusTextEl && this.callType === 'voice') {
                 window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+            }
+            if (this.callType === 'video') {
+                const videoTimer = document.getElementById('videoCallTimer');
+                if (videoTimer) videoTimer.textContent = '00:00';
             }
             window.callController.startCallTimer();
         }
@@ -468,6 +493,10 @@ class WebRTCManager {
     cleanup() {
         this.stopStatusPolling();
         this.stopSignalPolling();
+        if (this.disconnectTimeout) {
+            clearTimeout(this.disconnectTimeout);
+            this.disconnectTimeout = null;
+        }
         if (this.ringingTimeout) {
             clearTimeout(this.ringingTimeout);
             this.ringingTimeout = null;

@@ -33,8 +33,12 @@ class ChatManager {
                 }
             });
 
-            // Typing indicator handler
+            // Typing indicator and auto-grow handler
             this.inputField.addEventListener('input', () => {
+                // Auto grow textarea smoothly up to 120px
+                this.inputField.style.height = 'auto';
+                this.inputField.style.height = Math.min(this.inputField.scrollHeight, 120) + 'px';
+
                 if (!this.activeFriend || !window.wsClient) return;
 
                 if (!this.isTyping) {
@@ -70,6 +74,8 @@ class ChatManager {
         if (btnAttach && popover) {
             btnAttach.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const emojiP = document.getElementById('emojiPickerPopover');
+                if (emojiP) emojiP.classList.remove('active');
                 popover.classList.toggle('active');
             });
 
@@ -350,6 +356,8 @@ class ChatManager {
     }
 
     async sendMessage() {
+        if (this.isSending) return;
+
         if (!this.activeFriend || !this.activeFriend.id) {
             if (window.activeFriendId) {
                 this.activeFriend = { id: parseInt(window.activeFriendId), name: 'Chat', avatar: 'assets/images/default-avatar.png', status: 'offline' };
@@ -365,6 +373,7 @@ class ChatManager {
         const text = this.inputField.value.trim();
         if (!text) return;
 
+        this.isSending = true;
         const replyToId = this.activeReplyMessage ? this.activeReplyMessage.id : null;
         const receiverId = parseInt(this.activeFriend.id);
 
@@ -411,6 +420,8 @@ class ChatManager {
         } catch (e) {
             showToast('Network error while sending message', 'error');
             this.inputField.value = text;
+        } finally {
+            this.isSending = false;
         }
     }
 
