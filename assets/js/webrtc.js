@@ -20,14 +20,18 @@ class WebRTCManager {
         this.signalPollInProgress = false;
         this.ringingTimeout = null;
         this.disconnectTimeout = null;
+        this.mediaWarningTimeout = null;
 
+        const configuredIceServers = Array.isArray(window.WEBRTC_ICE_SERVERS) ? window.WEBRTC_ICE_SERVERS : [];
+        const fallbackStunServers = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+        ];
         this.iceConfig = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                ...(Array.isArray(window.WEBRTC_TURN_SERVERS) ? window.WEBRTC_TURN_SERVERS : [])
-            ]
+            iceServers: [...(configuredIceServers.length ? configuredIceServers : fallbackStunServers),
+                ...(Array.isArray(window.WEBRTC_TURN_SERVERS) ? window.WEBRTC_TURN_SERVERS : [])],
+            iceCandidatePoolSize: 4
         };
     }
 
@@ -292,6 +296,9 @@ class WebRTCManager {
                 }
             }
         };
+        this.peerConnection.onicecandidateerror = (event) => {
+            console.warn('[WebRTC] ICE server error:', event.errorCode, event.errorText, event.url);
+        };
 
         this.peerConnection.oniceconnectionstatechange = () => {
             const state = this.peerConnection.iceConnectionState;
@@ -309,10 +316,13 @@ class WebRTCManager {
                     }
                 }, 10000);
             } else if (state === 'failed') {
-                if (typeof showToast === 'function') showToast('Shabakadu ma xiri karin codka/muuqaalka. Hubi internet-ka iyo oggolaanshaha mic/camera.', 'error');
+                if (typeof showToast === 'function') showToast('Shabakadu ma helin waddo ay codka/muuqaalka ku gudbiso. TURN server ayaa loo baahan karaa.', 'error');
                 this.endCall('ended');
                 if (window.callController) window.callController.hideCallOverlay();
             }
+        };
+        this.peerConnection.onicegatheringstatechange = () => {
+            console.log('[WebRTC] ICE gathering state:', this.peerConnection && this.peerConnection.iceGatheringState);
         };
     }
 
@@ -367,7 +377,8 @@ class WebRTCManager {
         const answer = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(answer);
 
-        await this.sendCallSignal('answer', { sdp: this.peerConnection.localDescription });
+        const answerSignal = await this.sendCallSignal('answer', { sdp: this.peerConnection.localDescription });
+        if (!answerSignal) throw new Error('Jawaabta wicitaanka lama gaarsiin karin. Hubi xiriirka server-ka kadib isku day mar kale.');
         await fetch('api/calls/update.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -399,6 +410,8 @@ class WebRTCManager {
 
     markCallConnected() {
         this.callConnected = true;
+        clearTimeout(this.mediaWarningTimeout);
+        this.mediaWarningTimeout = null;
         this.markCallAccepted();
         if (this.callUiActivated) {
             if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
@@ -427,6 +440,18 @@ class WebRTCManager {
             }
             window.callController.startCallTimer();
         }
+        clearTimeout(this.mediaWarningTimeout);
+        this.mediaWarningTimeout = setTimeout(() => {
+            if (!this.callConnected && this.peerConnection) {
+                const state = this.peerConnection.iceConnectionState;
+                if (state !== 'connected' && state !== 'completed') {
+                    if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
+                        window.callController.statusTextEl.textContent = 'Media wali ma xirmana — TURN/network ayaa loo baahan kara.';
+                    }
+                    if (typeof showToast === 'function') showToast('Call-ku waa la aqbalay, balse codku ma gudbayo. Hubi TURN server-ka iyo shabakadda.', 'error');
+                }
+            }
+        }, 12000);
     }
 
     async handleIncomingIce(payload) {
@@ -512,6 +537,10 @@ class WebRTCManager {
         if (this.disconnectTimeout) {
             clearTimeout(this.disconnectTimeout);
             this.disconnectTimeout = null;
+        }
+        if (this.mediaWarningTimeout) {
+            clearTimeout(this.mediaWarningTimeout);
+            this.mediaWarningTimeout = null;
         }
         if (this.ringingTimeout) {
             clearTimeout(this.ringingTimeout);

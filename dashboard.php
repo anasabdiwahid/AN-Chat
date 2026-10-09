@@ -959,6 +959,10 @@ $userAvatar = $currentUser['profile_image'] ?
             'theme' => $currentUser['theme'] ?? 'light'
         ], JSON_UNESCAPED_SLASHES) ?>;
 
+        // ICE/TURN configuration comes from config/config.php. Add TURN
+        // credentials there to relay media on restrictive mobile networks.
+        window.WEBRTC_ICE_SERVERS = <?= json_encode(ICE_SERVERS, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
         window.SYSTEM_SETTINGS = {
             screenshot_detection: <?= json_encode($screenshotSetting) ?>
         };
