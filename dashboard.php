@@ -588,8 +588,9 @@ $userAvatar = $currentUser['profile_image'] ?
                 <div class="recording-bar" id="recordingBar">
                     <div class="recording-indicator">
                         <div class="recording-dot"></div>
-                        <span>Recording Voice Note... <span id="recordingTimer">00:00</span></span>
+                        <span>Recording <span id="recordingTimer">00:00</span></span>
                     </div>
+                    <div class="recording-waveform" id="recordingWaveform" role="img" aria-label="Live audio level"></div>
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-outline btn-sm" id="btnCancelRecord"><i class="fas fa-trash"></i> Cancel</button>
                         <button class="btn btn-primary btn-sm" id="btnSendRecord"><i class="fas fa-paper-plane"></i> Send Audio</button>

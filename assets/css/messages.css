@@ -588,7 +588,8 @@
     background: var(--surface);
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    gap: 14px;
+    padding: 10px 16px;
     z-index: 20;
 }
 
@@ -610,6 +611,52 @@
     border-radius: 50%;
     background-color: var(--danger);
     animation: pulse 1s infinite;
+}
+
+.recording-waveform {
+    height: 48px;
+    min-width: 70px;
+    flex: 1 1 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 10px;
+    overflow: hidden;
+    border-radius: 24px;
+    background: radial-gradient(ellipse at center, rgba(119, 42, 174, .16), rgba(5, 9, 22, .94) 72%);
+}
+
+.recording-waveform span {
+    display: block;
+    width: 3px;
+    height: 34px;
+    flex: 0 1 3px;
+    border-radius: 4px;
+    transform: scaleY(.12);
+    transform-origin: center;
+    background: linear-gradient(to top, #04d9ff, #367bff 40%, #b14cff 70%, #ff168d);
+    box-shadow: 0 0 7px currentColor, 0 0 13px rgba(143, 66, 255, .65);
+    opacity: .95;
+    transition: transform 65ms linear;
+}
+
+.recording-waveform span:nth-child(4n + 1) { filter: hue-rotate(-20deg); }
+.recording-waveform span:nth-child(4n + 2) { filter: hue-rotate(12deg); }
+
+@media (max-width: 560px) {
+    .recording-bar {
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 8px 10px;
+        gap: 6px 10px;
+    }
+
+    .recording-indicator { flex: 1 1 auto; font-size: 12px; }
+    .recording-waveform { order: 3; flex: 1 0 100%; height: 30px; }
+    .recording-waveform span { height: 24px; }
+    .recording-bar > div:last-child { gap: 6px !important; }
+    .recording-bar .btn { padding: 6px 9px; font-size: 11px; }
 }
 
 @keyframes pulse {

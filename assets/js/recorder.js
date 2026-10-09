@@ -8,6 +8,9 @@ class VoiceRecorder {
         this.startTime = null;
         this.timerInterval = null;
         this.isRecording = false;
+        this.audioContext = null;
+        this.analyser = null;
+        this.visualizerFrame = null;
     }
 
     async start() {
@@ -25,6 +28,7 @@ class VoiceRecorder {
             this.mediaRecorder.start();
             this.isRecording = true;
             this.startTime = Date.now();
+            this.startVisualizer();
 
             const recordingBar = document.getElementById('recordingBar');
             const timerEl = document.getElementById('recordingTimer');
@@ -42,6 +46,45 @@ class VoiceRecorder {
             console.error('[Microphone Access Error]', err);
             showToast('Microphone access denied or not available.', 'error');
             return false;
+        }
+    }
+
+    startVisualizer() {
+        const container = document.getElementById('recordingWaveform');
+        if (!container) return;
+        container.replaceChildren();
+        const barCount = 36;
+        for (let i = 0; i < barCount; i++) {
+            const bar = document.createElement('span');
+            bar.setAttribute('aria-hidden', 'true');
+            container.appendChild(bar);
+        }
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        try {
+            this.audioContext = new AudioContextClass();
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 128;
+            this.analyser.smoothingTimeConstant = 0.72;
+            this.audioContext.createMediaStreamSource(this.stream).connect(this.analyser);
+            const values = new Uint8Array(this.analyser.frequencyBinCount);
+            const bars = Array.from(container.children);
+            const draw = () => {
+                if (!this.isRecording || !this.analyser) return;
+                this.analyser.getByteFrequencyData(values);
+                bars.forEach((bar, index) => {
+                    const bin = Math.floor(index * values.length / bars.length);
+                    const level = values[bin] / 255;
+                    const scale = Math.max(.1, Math.min(1, .1 + level * 2.1));
+                    bar.style.transform = `scaleY(${scale})`;
+                });
+                this.visualizerFrame = requestAnimationFrame(draw);
+            };
+            this.audioContext.resume().catch(() => {});
+            draw();
+        } catch (error) {
+            console.warn('[VoiceRecorder] Audio visualizer unavailable:', error);
         }
     }
 
@@ -72,6 +115,13 @@ class VoiceRecorder {
     cleanup() {
         this.isRecording = false;
         clearInterval(this.timerInterval);
+        if (this.visualizerFrame) cancelAnimationFrame(this.visualizerFrame);
+        this.visualizerFrame = null;
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            this.audioContext.close().catch(() => {});
+        }
+        this.audioContext = null;
+        this.analyser = null;
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
@@ -80,8 +130,9 @@ class VoiceRecorder {
         if (recordingBar) recordingBar.classList.remove('active');
         const timerEl = document.getElementById('recordingTimer');
         if (timerEl) timerEl.textContent = '00:00';
+        const waveform = document.getElementById('recordingWaveform');
+        if (waveform) waveform.replaceChildren();
     }
 }
 
 window.VoiceRecorder = VoiceRecorder;
-
