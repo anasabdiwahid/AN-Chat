@@ -5,6 +5,14 @@ class Database {
     private static ?PDO $instance = null;
 
     public static function getConnection(): PDO {
+        if (self::$instance !== null && php_sapi_name() === 'cli') {
+            try {
+                @self::$instance->query('SELECT 1');
+            } catch (Throwable $t) {
+                self::$instance = null;
+            }
+        }
+
         if (self::$instance === null) {
             $isLive = (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'infinityfree') !== false || strpos($_SERVER['HTTP_HOST'], 'epizy') !== false));
 
@@ -44,6 +52,9 @@ class Database {
                         'message' => 'Database connection failed: ' . $e->getMessage()
                     ]);
                     exit;
+                }
+                if (php_sapi_name() === 'cli') {
+                    throw $e;
                 }
                 die("Database connection error: " . htmlspecialchars($e->getMessage()) . "<br><br>Host: {$host} | Database: {$dbname} | User: {$username}");
             }

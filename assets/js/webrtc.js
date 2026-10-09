@@ -40,90 +40,88 @@ class WebRTCManager {
         this.callType = callType;
         this.callConnected = false;
 
-        // 1. Notify Backend DB
+        // Acquire microphone before creating the incoming-call row. Otherwise
+        // the recipient can accept while the caller's permission prompt is
+        // still open and the SDP has not been made yet.
         try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) {
+                throw new Error('Browser-kan ma taageerayo wicitaan cod ah.');
+            }
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: callType === 'video'
+            });
+            if (!this.localStream || !this.localStream.getAudioTracks().length) {
+                throw new Error('Makarafoon lama helin. Fadlan oggolow microphone-ka browser-ka.');
+            }
+
+            if (callType === 'video') {
+                const localVideo = document.getElementById('localVideo');
+                if (localVideo) localVideo.srcObject = this.localStream;
+            }
+
+            this.setupPeerConnection();
+            const offer = await this.peerConnection.createOffer();
+            await this.peerConnection.setLocalDescription(offer);
+            this.localOffer = this.peerConnection.localDescription;
+
             const res = await fetch('api/calls/create.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ receiver_id: receiverId, call_type: callType })
             });
-            const data = await res.json();
-            if (!data.success) {
-                if (typeof showToast === 'function') {
-                    showToast(data.message || 'Cannot start call', 'error');
-                }
-                if (window.callController) window.callController.hideCallOverlay();
-                return false;
+            const result = await res.json();
+            if (!res.ok || !result.success || !result.data || !result.data.call_id) {
+                throw new Error(result.message || 'Wicitaanka lama bilaabi karin.');
             }
-            this.currentCallId = data.data.call_id;
-            // Start HTTP Status Polling so caller detects when receiver answers, declines, or hangs up
+
+            this.currentCallId = parseInt(result.data.call_id);
             this.startStatusPolling(this.currentCallId);
-        } catch (e) {
-            console.error('Call API error', e);
-        }
-
-        // Auto cancel if unanswered after 35 seconds
-        clearTimeout(this.ringingTimeout);
-        this.ringingTimeout = setTimeout(() => {
-            if (this.currentCallId && !this.callConnected) {
-                this.endCall('missed');
-                if (window.callController) {
-                    window.callController.hideCallOverlay();
-                    window.callController.playCallEndTone();
+            clearTimeout(this.ringingTimeout);
+            this.ringingTimeout = setTimeout(() => {
+                if (this.currentCallId && !this.callConnected) {
+                    this.endCall('missed');
+                    if (window.callController) {
+                        window.callController.hideCallOverlay();
+                        window.callController.playCallEndTone();
+                    }
+                    if (typeof showToast === 'function') showToast('Qofku kama jawaabin wicitaanka.', 'info');
                 }
-                if (typeof showToast === 'function') {
-                    showToast('Qofku kama jawaabin wicitaanka.', 'info');
-                }
+            }, 35000);
+
+            this.sendWs({
+                type: 'call_offer',
+                target_user_id: receiverId,
+                call_id: this.currentCallId,
+                call_type: callType,
+                caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
+                caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
+                sdp: this.localOffer
+            });
+            (this.pendingLocalIceCandidates || []).forEach(candidate => {
+                this.sendWs({
+                    type: 'call_ice',
+                    target_user_id: receiverId,
+                    call_id: this.currentCallId,
+                    candidate
+                });
+            });
+            this.pendingLocalIceCandidates = [];
+            return true;
+        } catch (error) {
+            console.error('[WebRTC] Could not start call:', error);
+            if (this.currentCallId) {
+                fetch('api/calls/update.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ call_id: this.currentCallId, status: 'missed' })
+                }).catch(() => {});
             }
-        }, 35000);
-
-        // 2. Check media devices support
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const constraints = {
-                audio: true,
-                video: callType === 'video'
-            };
-
-            try {
-                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            } catch (err) {
-                console.warn('getUserMedia warning:', err);
-                if (typeof showToast === 'function') {
-                    showToast('Fadlan ogolow Microphone/Camera-ka browser-ka si aad u wacdo.', 'warning');
-                }
-            }
+            this.cleanup();
+            if (window.callController) window.callController.hideCallOverlay();
+            if (typeof showToast === 'function') showToast(error.message || 'Microphone-ka lama heli karin.', 'error');
+            return false;
         }
-
-        // Attach local preview if video
-        if (callType === 'video' && this.localStream) {
-            const localVideo = document.getElementById('localVideo');
-            if (localVideo) localVideo.srcObject = this.localStream;
-        }
-
-        // 3. Initialize RTCPeerConnection if available
-        let offer = null;
-        try {
-            if (window.RTCPeerConnection && this.localStream) {
-                this.setupPeerConnection();
-                offer = await this.peerConnection.createOffer();
-                await this.peerConnection.setLocalDescription(offer);
-            }
-        } catch (webrtcErr) {
-            console.warn('[WebRTC] WebRTC handshake warning:', webrtcErr);
-        }
-
-        // 4. Send Signaling Offer via WebSocket - ALWAYS SEND so recipient rings!
-        this.sendWs({
-            type: 'call_offer',
-            target_user_id: receiverId,
-            call_id: this.currentCallId,
-            call_type: callType,
-            caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
-            caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
-            sdp: offer
-        });
-
-        return true;
     }
 
     startStatusPolling(callId) {
@@ -182,7 +180,7 @@ class WebRTCManager {
         }
 
         this.peerConnection = new RTCPeerConnection(this.iceConfig);
-        this.pendingIceCandidates = [];
+        this.pendingIceCandidates = this.pendingIceCandidates || [];
 
         // Add local tracks to peer connection
         if (this.localStream) {
@@ -224,11 +222,17 @@ class WebRTCManager {
         // ICE candidate found -> forward to peer
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.activePeerId) {
-                this.sendWs({
-                    type: 'call_ice',
-                    target_user_id: this.activePeerId,
-                    candidate: event.candidate
-                });
+                if (!this.currentCallId) {
+                    this.pendingLocalIceCandidates = this.pendingLocalIceCandidates || [];
+                    this.pendingLocalIceCandidates.push(event.candidate);
+                } else {
+                    this.sendWs({
+                        type: 'call_ice',
+                        target_user_id: this.activePeerId,
+                        call_id: this.currentCallId,
+                        candidate: event.candidate
+                    });
+                }
             }
         };
 
@@ -254,23 +258,24 @@ class WebRTCManager {
     }
 
     async handleIncomingOffer(payload) {
-        this.activePeerId = payload.from_user_id;
-        this.currentCallId = payload.call_id;
+        this.activePeerId = parseInt(payload.from_user_id || payload.caller_id || 0);
+        this.currentCallId = parseInt(payload.call_id || payload.id || 0);
         this.callType = payload.call_type || 'voice';
-        this.callConnected = true;
+        if (!payload.sdp || !this.activePeerId || !this.currentCallId) {
+            throw new Error('Wicitaanku weli diyaar ma aha. Sug offer-ka wicaha.');
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) {
+            throw new Error('Browser-kan ma taageerayo wicitaanka codka.');
+        }
 
-        // Obtain local media
-        const constraints = {
+        // Do not mark the call answered until this device has microphone access
+        // and has built a real SDP answer containing its audio track.
+        this.localStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
             video: this.callType === 'video'
-        };
-
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            try {
-                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            } catch (err) {
-                console.warn('[WebRTC] getUserMedia failed for answer:', err);
-            }
+        });
+        if (!this.localStream || !this.localStream.getAudioTracks().length) {
+            throw new Error('Makarafoon lama helin. Fadlan oggolow microphone-ka browser-ka.');
         }
 
         if (this.callType === 'video' && this.localStream) {
@@ -281,43 +286,30 @@ class WebRTCManager {
             }
         }
 
-        let answer = null;
-        if (window.RTCPeerConnection && payload.sdp) {
-            try {
-                this.setupPeerConnection();
-                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-                await this.drainPendingIceCandidates();
-                answer = await this.peerConnection.createAnswer();
-                await this.peerConnection.setLocalDescription(answer);
-            } catch (e) {
-                console.warn('[WebRTC] SDP handshake warning:', e);
-            }
-        }
+        this.setupPeerConnection();
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        await this.drainPendingIceCandidates();
+        const answer = await this.peerConnection.createAnswer();
+        await this.peerConnection.setLocalDescription(answer);
 
-        // Send answer back to caller via WebSocket - ALWAYS SEND so caller UI transitions instantly
         this.sendWs({
             type: 'call_answer',
-            target_user_id: payload.from_user_id,
+            target_user_id: this.activePeerId,
             call_id: this.currentCallId,
-            sdp: answer
+            sdp: this.peerConnection.localDescription
         });
-
-        // Also notify call_status answered
         this.sendWs({
             type: 'call_status',
-            target_user_id: payload.from_user_id,
+            target_user_id: this.activePeerId,
             call_id: this.currentCallId,
             status: 'answered'
         });
-
-        // Notify DB call answered
-        fetch('api/calls/update.php', {
+        this.callConnected = true;
+        await fetch('api/calls/update.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ call_id: this.currentCallId, status: 'answered' })
-        }).catch(() => {});
-
-        // Start status polling on receiver side too so if caller hangs up, receiver ends
+        });
         this.startStatusPolling(this.currentCallId);
     }
 
@@ -436,6 +428,8 @@ class WebRTCManager {
         this.remoteStream = null;
         this.activePeerId = null;
         this.currentCallId = null;
+        this.localOffer = null;
+        this.pendingLocalIceCandidates = [];
         this.isAudioMuted = false;
         this.isVideoMuted = false;
         this.pendingIceCandidates = [];

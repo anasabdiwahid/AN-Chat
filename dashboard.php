@@ -212,9 +212,17 @@ $userAvatar = $currentUser['profile_image'] ?
         window._openChatWithImpl = openChatWith;
 
         function startCall(type) {
-            if (typeof window.startCall === 'function') {
-                window.startCall(type);
+            const friend = window.chatManager && window.chatManager.activeFriend;
+            const peerId = (friend && friend.id) || window.activeFriendId;
+            if (peerId && typeof window.startCallWith === 'function') {
+                return window.startCallWith(
+                    peerId,
+                    friend ? friend.name : (document.getElementById('chatHeaderName')?.textContent || 'Friend'),
+                    friend ? friend.avatar : 'assets/images/default-avatar.png',
+                    type || 'voice'
+                );
             }
+            if (typeof window.showToast === 'function') window.showToast('Marka hore dooro qofka aad wacayso.', 'info');
         }
         window.startCall = startCall;
 
@@ -484,10 +492,10 @@ $userAvatar = $currentUser['profile_image'] ?
                     </div>
 
                     <div class="chat-header-actions">
-                        <button class="btn-icon" id="btnStartVoiceCall" title="Start Voice Call" style="color:var(--primary);">
+                        <button type="button" class="btn-icon" id="btnStartVoiceCall" title="Start Voice Call" aria-label="Start voice call" onclick="if (typeof window.startCall === 'function') window.startCall('voice');">
                             <i class="fas fa-phone-alt"></i>
                         </button>
-                        <button class="btn-icon" id="btnStartVideoCall" title="Start Video Call" style="color:var(--primary);">
+                        <button type="button" class="btn-icon" id="btnStartVideoCall" title="Start Video Call" aria-label="Start video call" onclick="if (typeof window.startCall === 'function') window.startCall('video');">
                             <i class="fas fa-video"></i>
                         </button>
                         <div style="position:relative;">
@@ -637,7 +645,7 @@ $userAvatar = $currentUser['profile_image'] ?
                     <span style="font-size:12px;color:rgba(255,255,255,0.8);">Decline</span>
                 </div>
                 <div class="call-btn-action">
-                    <button class="call-btn-circle accept" id="btnAcceptCall" title="Accept">
+                    <button type="button" class="call-btn-circle accept" id="btnAcceptCall" title="Accept" aria-label="Accept call" onclick="if (typeof window.acceptIncomingCall === 'function') window.acceptIncomingCall();">
                         <i class="fas fa-phone"></i>
                     </button>
                     <span style="font-size:12px;color:rgba(255,255,255,0.8);">Accept</span>
@@ -977,4 +985,3 @@ $userAvatar = $currentUser['profile_image'] ?
     <script src="assets/js/app.js?v=<?= @filemtime(__DIR__ . '/assets/js/app.js') ?: time() ?>"></script>
 </body>
 </html>
-

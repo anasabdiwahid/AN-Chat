@@ -17,6 +17,8 @@ class CallController {
         this.isRinging = false;
         this.isRingbackPlaying = false;
         this.pendingIncomingPayload = null;
+        this.acceptPendingCallId = null;
+        this.isAcceptingCall = false;
 
         this.initControls();
     }
@@ -25,19 +27,7 @@ class CallController {
         // Accept Incoming Call
         const btnAccept = document.getElementById('btnAcceptCall');
         if (btnAccept) {
-            btnAccept.addEventListener('click', async () => {
-                this.stopRingtone();
-                this.stopRingbackTone();
-                if (!window.webrtc && typeof WebRTCManager === 'function') {
-                    window.webrtc = new WebRTCManager(window.wsClient || null);
-                }
-                if (this.pendingIncomingPayload && window.webrtc) {
-                    await window.webrtc.handleIncomingOffer(this.pendingIncomingPayload);
-                    this.showActiveCallScreen(this.pendingIncomingPayload.call_type);
-                    // Start timer ONLY once call is answered and conversation begins
-                    this.startCallTimer();
-                }
-            });
+            btnAccept.type = 'button';
         }
 
         // Decline Incoming Call
@@ -197,6 +187,70 @@ class CallController {
         this.startRingtone();
     }
 
+    async acceptIncomingCall() {
+        const payload = this.pendingIncomingPayload;
+        if (!payload || this.isAcceptingCall) return false;
+
+        // The database notification can arrive while the caller is still
+        // opening its microphone. Keep the accept intent until the SDP offer
+        // arrives over WebSocket; answering an empty offer cannot carry audio.
+        if (!Object.prototype.hasOwnProperty.call(payload, 'sdp')) {
+            this.acceptPendingCallId = parseInt(payload.call_id || payload.id || 0);
+            const typeEl = document.getElementById('incomingCallType');
+            if (typeEl) typeEl.textContent = 'Connecting to caller...';
+            if (this.acceptPendingCallId && window.wsClient && typeof window.wsClient.send === 'function') {
+                window.wsClient.send({
+                    type: 'call_request_offer',
+                    target_user_id: payload.from_user_id || payload.caller_id,
+                    call_id: this.acceptPendingCallId
+                });
+            }
+            return true;
+        }
+        if (!payload.sdp) {
+            this.acceptPendingCallId = null;
+            const typeEl = document.getElementById('incomingCallType');
+            if (typeEl) typeEl.textContent = 'Wacaha makarafoonkiisa ma uusan oggolaan.';
+            if (typeof showToast === 'function') showToast('Wacaha ha oggolaado makarafoonka kadibna mar kale ha soo waco.', 'error');
+            return false;
+        }
+
+        this.isAcceptingCall = true;
+        this.acceptPendingCallId = null;
+        this.stopRingtone();
+        this.stopRingbackTone();
+
+        // Show immediate progress, but only mark Connected when SDP/media setup succeeds.
+        this.showActiveCallScreen(payload.call_type || 'voice');
+        if (this.statusTextEl) {
+            this.statusTextEl.textContent = 'Connecting...';
+        }
+
+        try {
+            if (!window.webrtc && typeof WebRTCManager === 'function') {
+                window.webrtc = new WebRTCManager(window.wsClient || null);
+            }
+            if (window.webrtc) {
+                await window.webrtc.handleIncomingOffer(payload);
+                if (this.statusTextEl) {
+                    this.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+                }
+                this.startCallTimer();
+            } else {
+                throw new Error('WebRTC is unavailable in this browser.');
+            }
+            return true;
+        } catch (error) {
+            console.error('[Call] Could not accept incoming call:', error);
+            this.hideCallOverlay();
+            if (window.webrtc) window.webrtc.cleanup();
+            if (typeof showToast === 'function') showToast(error.message || 'Wicitaanka lama xiri karin.', 'error');
+            return false;
+        } finally {
+            this.isAcceptingCall = false;
+        }
+    }
+
     // 5. Active Call Screen (Call is Answered & Connected)
     showActiveCallScreen(callType) {
         this.stopRingtone();
@@ -245,6 +299,7 @@ class CallController {
         this.stopRingbackTone();
         this.stopCallTimer();
         this.resetOverlay();
+        this.acceptPendingCallId = null;
         if (this.activeCallOverlay) {
             this.activeCallOverlay.classList.remove('active');
         }
@@ -407,6 +462,73 @@ class CallController {
 
 window.CallController = CallController;
 
+// Inline fallback keeps the Accept action reachable if another dashboard
+// initializer failed before CallController could attach its event listener.
+window.acceptIncomingCall = function() {
+    if (!window.callController && typeof CallController === 'function') {
+        window.callController = new CallController();
+    }
+    return window.callController ? window.callController.acceptIncomingCall() : false;
+};
+
+// Incoming call delivery is started by the call module itself, independently
+// from dashboard/message initialization so it cannot be skipped by that code.
+let incomingCallRequestPending = false;
+
+async function checkForIncomingCall() {
+    if (incomingCallRequestPending) return;
+    incomingCallRequestPending = true;
+    try {
+        const response = await fetch('api/calls/incoming.php', { cache: 'no-store', credentials: 'same-origin' });
+        if (!response.ok) {
+            console.warn('[Call] Incoming-call endpoint returned HTTP', response.status);
+            return;
+        }
+        const result = await response.json();
+        if (!result.success) {
+            console.warn('[Call] Incoming-call endpoint error:', result.message || 'Unknown error');
+            return;
+        }
+
+        const call = result.data;
+        if (call) {
+            if (!window.callController) window.callController = new CallController();
+            const controller = window.callController;
+            const current = controller.pendingIncomingPayload;
+            const incomingBoxVisible = controller.incomingBox && controller.incomingBox.style.display === 'flex';
+            const anotherCallIsActive = controller.activeCallOverlay
+                && controller.activeCallOverlay.classList.contains('active')
+                && !incomingBoxVisible;
+
+            if (!anotherCallIsActive && (!current || parseInt(current.call_id) !== parseInt(call.id))) {
+                controller.showIncomingCall({
+                    from_user_id: parseInt(call.caller_id),
+                    call_id: parseInt(call.id),
+                    call_type: call.call_type,
+                    caller_name: call.caller_name,
+                    caller_image: call.caller_image
+                });
+            }
+        } else if (window.callController && window.callController.pendingIncomingPayload) {
+            const controller = window.callController;
+            const incomingBoxVisible = controller.incomingBox && controller.incomingBox.style.display === 'flex';
+            if (incomingBoxVisible) {
+                controller.hideCallOverlay();
+                controller.playCallEndTone();
+            }
+            controller.pendingIncomingPayload = null;
+        }
+    } catch (error) {
+        console.warn('[Call] Could not check for incoming calls:', error);
+    } finally {
+        incomingCallRequestPending = false;
+    }
+}
+
+window.checkForIncomingCall = checkForIncomingCall;
+checkForIncomingCall();
+setInterval(checkForIncomingCall, 1000);
+
 let _isInitiatingCall = false;
 
 /**
@@ -495,4 +617,30 @@ window.startCall = function(callType = 'voice') {
     }
 
     window.startCallWith(peerId, peerName, peerAvatar, callType);
+};
+
+window.acceptIncomingCall = function() {
+    if (window.callController && typeof window.callController.acceptIncomingCall === 'function') {
+        return window.callController.acceptIncomingCall();
+    }
+};
+
+window.declineIncomingCall = function() {
+    if (window.callController) {
+        window.callController.stopRingtone();
+        window.callController.stopRingbackTone();
+        if (window.callController.pendingIncomingPayload) {
+            const p = window.callController.pendingIncomingPayload;
+            if (window.webrtc) {
+                window.webrtc.declineCall(p.from_user_id, p.call_id);
+            } else if (p.call_id) {
+                fetch('api/calls/update.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ call_id: p.call_id, status: 'declined' })
+                }).catch(() => {});
+            }
+        }
+        window.callController.hideCallOverlay();
+    }
 };

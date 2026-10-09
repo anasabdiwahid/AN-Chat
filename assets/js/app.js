@@ -1,5 +1,11 @@
 // assets/js/app.js - Master Dashboard Application Controller
 
+// Declare sync state before the dashboard initializer can run. This script
+// may be loaded after DOMContentLoaded in some navigation/browser scenarios.
+let isSyncInProgress = false;
+let previousUnreadMap = {};
+let autoSyncIntervalTimer = null;
+
 // Global Safe Utilities
 if (typeof window.escapeHtml !== 'function') {
     window.escapeHtml = function(text) {
@@ -197,6 +203,31 @@ class WebSocketClient {
 
             case 'call_offer':
                 // Incoming voice or video call
+                if (window.callController && window.callController.acceptPendingCallId
+                    && parseInt(window.callController.acceptPendingCallId) === parseInt(data.call_id)) {
+                    window.callController.showIncomingCall(data);
+                    window.callController.acceptIncomingCall();
+                    break;
+                }
+                if (window.webrtc && window.webrtc.currentCallId && parseInt(window.webrtc.currentCallId) === parseInt(data.call_id) && window.webrtc.callConnected) {
+                    if (data.sdp && window.RTCPeerConnection) {
+                        try {
+                            if (!window.webrtc.peerConnection) window.webrtc.setupPeerConnection();
+                            window.webrtc.peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(async () => {
+                                await window.webrtc.drainPendingIceCandidates();
+                                const answer = await window.webrtc.peerConnection.createAnswer();
+                                await window.webrtc.peerConnection.setLocalDescription(answer);
+                                this.send({
+                                    type: 'call_answer',
+                                    target_user_id: data.from_user_id,
+                                    call_id: data.call_id,
+                                    sdp: answer
+                                });
+                            }).catch(e => console.warn('[WebRTC] Answer offer error:', e));
+                        } catch (e) {}
+                    }
+                    break;
+                }
                 if (window.callController) {
                     window.callController.showIncomingCall(data);
                 }
@@ -210,14 +241,30 @@ class WebSocketClient {
                 }
                 break;
 
+            case 'call_request_offer':
+                if (window.webrtc
+                    && parseInt(window.webrtc.currentCallId) === parseInt(data.call_id)
+                    && (window.webrtc.localOffer || (window.webrtc.peerConnection && window.webrtc.peerConnection.localDescription))) {
+                    this.send({
+                        type: 'call_offer',
+                        target_user_id: data.from_user_id,
+                        call_id: data.call_id,
+                        call_type: window.webrtc.callType || 'voice',
+                        caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
+                        caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
+                        sdp: window.webrtc.localOffer || window.webrtc.peerConnection.localDescription
+                    });
+                }
+                break;
+
             case 'call_answer':
                 if (window.webrtc) {
                     window.webrtc.handleIncomingAnswer(data);
-                    if (window.callController) {
-                        window.callController.showActiveCallScreen(window.webrtc.callType);
-                        // Start the call timer ONLY after recipient answers and conversation begins
-                        window.callController.startCallTimer();
-                    }
+                }
+                if (window.callController) {
+                    const cType = (window.webrtc && window.webrtc.callType) ? window.webrtc.callType : 'voice';
+                    window.callController.showActiveCallScreen(cType);
+                    window.callController.startCallTimer();
                 }
                 break;
 
@@ -236,11 +283,19 @@ class WebSocketClient {
                     if (window.callController) {
                         window.callController.setStatusOffline();
                     }
+                } else if (data.status === 'answered') {
+                    if (window.callController) {
+                        const cType = (window.webrtc && window.webrtc.callType) ? window.webrtc.callType : 'voice';
+                        window.callController.showActiveCallScreen(cType);
+                        window.callController.startCallTimer();
+                    }
                 } else if (data.status === 'declined' || data.status === 'ended') {
                     if (window.callController) {
                         window.callController.hideCallOverlay();
                         window.callController.playCallEndTone();
-                        showToast(`Call ${data.status}`, 'info');
+                        if (typeof showToast === 'function') {
+                            showToast(`Call ${data.status}`, 'info');
+                        }
                     }
                     if (window.webrtc) {
                         window.webrtc.cleanup();
@@ -489,7 +544,10 @@ function initializeDashboardApp() {
     if (window.CURRENT_USER && window.CURRENT_USER.id) {
         try {
             const isSecure = window.location.protocol === 'https:';
-            const wsHost = window.location.hostname || 'localhost';
+            const pageHost = window.location.hostname || 'localhost';
+            // XAMPP's WebSocket server binds IPv4; avoid localhost resolving to
+            // ::1 where no listener is available on some Windows setups.
+            const wsHost = pageHost.toLowerCase() === 'localhost' ? '127.0.0.1' : pageHost;
             const isInfinityFree = wsHost.includes('infinityfree') || wsHost.includes('epizy') || wsHost.includes('byethost');
 
             if (!isInfinityFree) {
@@ -509,7 +567,7 @@ function initializeDashboardApp() {
         try { window.chatManager = new ChatManager(); } catch (e) {}
 
         // Unified Real-Time 4-Second Auto-Sync Engine (Auto-Refresh & Auto-Save)
-        try { startUnifiedAutoSyncEngine(); } catch (e) {}
+        try { startUnifiedAutoSyncEngine(); } catch (e) { console.error('[A/N Chat] Realtime polling failed to start:', e); }
     }
 
     // 3. Navigation Rail / Bottom Nav Tab Switching
@@ -530,27 +588,7 @@ function initializeDashboardApp() {
         });
     }
 
-    // 6. Header Call Buttons
-    const btnVoiceCall = document.getElementById('btnStartVoiceCall');
-    const btnVideoCall = document.getElementById('btnStartVideoCall');
-
-    if (btnVoiceCall) {
-        btnVoiceCall.addEventListener('click', () => {
-            if (typeof window.startCall === 'function') {
-                window.startCall('voice');
-            }
-        });
-    }
-
-    if (btnVideoCall) {
-        btnVideoCall.addEventListener('click', () => {
-            if (typeof window.startCall === 'function') {
-                window.startCall('video');
-            }
-        });
-    }
-
-    // 7. Middle Panel Search Input
+    // 6. Middle Panel Search Input
     const searchInput = document.getElementById('middleSearchInput');
     let searchDebounce = null;
     if (searchInput) {
@@ -574,13 +612,6 @@ function initializeDashboardApp() {
 
     // 8. User Profile Modal & Settings
     setupProfileModal();
-}
-
-// Lifecycle execution guard: executes immediately if DOM is ready, or on DOMContentLoaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeDashboardApp);
-} else {
-    initializeDashboardApp();
 }
 
 async function loadFriendsList() {
@@ -851,10 +882,6 @@ function updateUserStatusInUI(userId, status, lastSeen) {
 /* Unified Real-Time 1-Second Auto-Sync Engine                */
 /* (Auto-Refresh & Auto-Save: Messages, Settings, Badges)    */
 /* ========================================================== */
-let isSyncInProgress = false;
-let previousUnreadMap = {};
-let autoSyncIntervalTimer = null;
-
 function refreshCurrentTab() {
     const activeTab = document.querySelector('.nav-item.active, .bottom-nav-item.active')?.getAttribute('data-tab') || 'chats';
     if (activeTab === 'chats') {
@@ -875,7 +902,6 @@ function startUnifiedAutoSyncEngine() {
     if (autoSyncIntervalTimer) clearInterval(autoSyncIntervalTimer);
     setTimeout(runAutoSyncHeartbeat, 300);
     autoSyncIntervalTimer = setInterval(runAutoSyncHeartbeat, intervalMs);
-
     // Request Web Notification permission on first user interaction so alerts pop up even if tab minimized
     const requestPushPermission = () => {
         if ('Notification' in window && Notification.permission === 'default') {
@@ -1276,3 +1302,10 @@ function openSettingsModal() {
 }
 window.openSettingsModal = openSettingsModal;
 
+// Initialize only after every declaration and realtime handler in this file
+// has been evaluated. This guarantees polling state exists before startup.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeDashboardApp, { once: true });
+} else {
+    initializeDashboardApp();
+}
