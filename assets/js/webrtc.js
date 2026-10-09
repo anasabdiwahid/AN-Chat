@@ -12,6 +12,7 @@ class WebRTCManager {
         this.isAudioMuted = false;
         this.isVideoMuted = false;
         this.callConnected = false;
+        this.callAccepted = false;
         this.callUiActivated = false;
         this.statusPollInterval = null;
         this.signalPollInterval = null;
@@ -45,6 +46,7 @@ class WebRTCManager {
         this.activePeerId = receiverId;
         this.callType = callType;
         this.callConnected = false;
+        this.callAccepted = false;
         this.callUiActivated = false;
 
         // Acquire microphone before creating the incoming-call row. Otherwise
@@ -136,7 +138,9 @@ class WebRTCManager {
                 const data = await res.json();
                 if (data && data.success && data.data) {
                     const status = data.data.status;
-                    if (status === 'declined' || status === 'missed' || status === 'ended') {
+                    if (status === 'answered' && !this.callAccepted) {
+                        this.markCallAccepted();
+                    } else if (status === 'declined' || status === 'missed' || status === 'ended') {
                         this.stopStatusPolling();
                         if (window.callController) {
                             window.callController.hideCallOverlay();
@@ -369,6 +373,7 @@ class WebRTCManager {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ call_id: this.currentCallId, status: 'answered' })
         });
+        this.markCallAccepted();
         this.startStatusPolling(this.currentCallId);
         this.startSignalPolling(this.currentCallId);
     }
@@ -384,6 +389,7 @@ class WebRTCManager {
         try {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
             await this.drainPendingIceCandidates();
+            this.markCallAccepted();
             return true;
         } catch (e) {
             console.warn('[WebRTC] Answer setRemoteDescription error:', e);
@@ -393,21 +399,31 @@ class WebRTCManager {
 
     markCallConnected() {
         this.callConnected = true;
+        this.markCallAccepted();
+        if (this.callUiActivated) {
+            if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
+                window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+            }
+            return;
+        }
+        this.callUiActivated = true;
+        if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
+            window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+        }
+    }
+
+    markCallAccepted() {
+        if (this.callAccepted) return;
+        this.callAccepted = true;
         if (this.ringingTimeout) {
             clearTimeout(this.ringingTimeout);
             this.ringingTimeout = null;
         }
-        if (this.callUiActivated) return;
-
-        this.callUiActivated = true;
         if (window.callController) {
+            window.callController.stopRingbackTone();
             window.callController.showActiveCallScreen(this.callType);
             if (window.callController.statusTextEl && this.callType === 'voice') {
-                window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
-            }
-            if (this.callType === 'video') {
-                const videoTimer = document.getElementById('videoCallTimer');
-                if (videoTimer) videoTimer.textContent = '00:00';
+                window.callController.statusTextEl.textContent = 'Connecting media...';
             }
             window.callController.startCallTimer();
         }
@@ -502,6 +518,7 @@ class WebRTCManager {
             this.ringingTimeout = null;
         }
         this.callConnected = false;
+        this.callAccepted = false;
         this.callUiActivated = false;
 
         if (this.peerConnection) {

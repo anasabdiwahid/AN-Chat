@@ -265,8 +265,8 @@ class WebSocketClient {
             case 'call_answer':
                 if (window.webrtc) {
                     window.webrtc.handleIncomingAnswer(data);
-                }
-                if (window.callController) {
+                    window.webrtc.markCallAccepted();
+                } else if (window.callController) {
                     const cType = (window.webrtc && window.webrtc.callType) ? window.webrtc.callType : 'voice';
                     window.callController.showActiveCallScreen(cType);
                 }
@@ -288,7 +288,9 @@ class WebSocketClient {
                         window.callController.setStatusOffline();
                     }
                 } else if (data.status === 'answered') {
-                    if (window.callController) {
+                    if (window.webrtc) {
+                        window.webrtc.markCallAccepted();
+                    } else if (window.callController) {
                         const cType = (window.webrtc && window.webrtc.callType) ? window.webrtc.callType : 'voice';
                         window.callController.showActiveCallScreen(cType);
                     }
