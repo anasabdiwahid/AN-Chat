@@ -94,5 +94,12 @@ class Call {
 
         return $stmt->fetchAll();
     }
+
+    public function getCall(int $callId): ?array {
+        $stmt = $this->db->prepare("SELECT * FROM calls WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $callId]);
+        $call = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $call ?: null;
+    }
 }
 

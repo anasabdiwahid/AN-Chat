@@ -153,53 +153,59 @@ class Friend {
     }
 
     public function getFriendsList(int $userId): array {
-        $stmt = $this->db->prepare("
-            SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio, u.status, u.last_seen,
-                   f.created_at AS friendship_date,
-                   (
-                       SELECT m.message 
-                       FROM messages m 
-                       WHERE (m.sender_id = :uid1 AND m.receiver_id = u.id) 
-                          OR (m.sender_id = u.id AND m.receiver_id = :uid2)
-                       ORDER BY m.id DESC LIMIT 1
-                   ) AS last_message,
-                   (
-                       SELECT m.message_type 
-                       FROM messages m 
-                       WHERE (m.sender_id = :uid3 AND m.receiver_id = u.id) 
-                          OR (m.sender_id = u.id AND m.receiver_id = :uid4)
-                       ORDER BY m.id DESC LIMIT 1
-                   ) AS last_message_type,
-                   (
-                       SELECT m.created_at 
-                       FROM messages m 
-                       WHERE (m.sender_id = :uid5 AND m.receiver_id = u.id) 
-                          OR (m.sender_id = u.id AND m.receiver_id = :uid6)
-                       ORDER BY m.id DESC LIMIT 1
-                   ) AS last_message_time,
-                   (
-                       SELECT COUNT(*) 
-                       FROM messages m 
-                       WHERE m.sender_id = u.id AND m.receiver_id = :uid7 AND m.is_read = 0
-                   ) AS unread_count
-            FROM friendships f
-            JOIN users u ON f.friend_id = u.id
-            WHERE f.user_id = :uid8
-            ORDER BY COALESCE(last_message_time, f.created_at) DESC
-        ");
+        try {
+            $stmt = $this->db->prepare("
+                SELECT u.id, u.fullname, u.phone, u.profile_image, u.bio, u.status, u.last_seen,
+                       f.created_at AS friendship_date,
+                       (
+                           SELECT m.message 
+                           FROM messages m 
+                           WHERE (m.sender_id = :uid1 AND m.receiver_id = u.id) 
+                              OR (m.sender_id = u.id AND m.receiver_id = :uid2)
+                           ORDER BY m.id DESC LIMIT 1
+                       ) AS last_message,
+                       (
+                           SELECT m.message_type 
+                           FROM messages m 
+                           WHERE (m.sender_id = :uid3 AND m.receiver_id = u.id) 
+                              OR (m.sender_id = u.id AND m.receiver_id = :uid4)
+                           ORDER BY m.id DESC LIMIT 1
+                       ) AS last_message_type,
+                       (
+                           SELECT m.created_at 
+                           FROM messages m 
+                           WHERE (m.sender_id = :uid5 AND m.receiver_id = u.id) 
+                              OR (m.sender_id = u.id AND m.receiver_id = :uid6)
+                           ORDER BY m.id DESC LIMIT 1
+                       ) AS last_message_time,
+                       (
+                           SELECT COUNT(*) 
+                           FROM messages m 
+                           WHERE m.sender_id = u.id AND m.receiver_id = :uid7 AND m.is_read = 0
+                       ) AS unread_count
+                FROM friendships f
+                JOIN users u ON f.friend_id = u.id
+                WHERE f.user_id = :uid8
+                ORDER BY COALESCE(last_message_time, f.created_at) DESC
+            ");
 
-        $stmt->execute([
-            ':uid1' => $userId,
-            ':uid2' => $userId,
-            ':uid3' => $userId,
-            ':uid4' => $userId,
-            ':uid5' => $userId,
-            ':uid6' => $userId,
-            ':uid7' => $userId,
-            ':uid8' => $userId
-        ]);
+            $stmt->execute([
+                ':uid1' => $userId,
+                ':uid2' => $userId,
+                ':uid3' => $userId,
+                ':uid4' => $userId,
+                ':uid5' => $userId,
+                ':uid6' => $userId,
+                ':uid7' => $userId,
+                ':uid8' => $userId
+            ]);
 
-        return $stmt->fetchAll();
+            $results = $stmt->fetchAll();
+            return is_array($results) ? $results : [];
+        } catch (Throwable $e) {
+            error_log("Friend::getFriendsList error: " . $e->getMessage());
+            return [];
+        }
     }
 
     public function getPendingRequests(int $userId): array {

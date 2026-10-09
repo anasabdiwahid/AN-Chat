@@ -32,21 +32,31 @@ class FriendsManager {
 
             let html = '';
             data.data.forEach(u => {
+                const userId = parseInt(u.id);
+                window.friendsCache = window.friendsCache || {};
+                window.friendsCache[userId] = u;
+
                 const avatar = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(u.profile_image) : (u.profile_image || 'assets/images/default-avatar.png');
                 let btnHtml = '';
 
+                const safeName = escapeHtml(u.fullname).replace(/'/g, "\\'");
+                const safeAvatar = avatar.replace(/'/g, "\\'");
+                const safeStatus = (u.status || 'offline').replace(/'/g, "\\'");
+
                 if (u.is_friend > 0) {
-                    btnHtml = `<button class="btn btn-secondary btn-sm" onclick="openChatWith(${u.id}, '${escapeHtml(u.fullname)}', '${escapeHtml(avatar)}', '${u.status}')"><i class="fas fa-comment"></i> Chat</button>`;
+                    btnHtml = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openChatWith(${userId}, '${safeName}', '${safeAvatar}', '${safeStatus}');"><i class="fas fa-comment"></i> Chat</button>`;
                 } else if (u.sent_req_status === 'pending') {
                     btnHtml = `<button class="btn btn-outline btn-sm" disabled><i class="fas fa-clock"></i> Requested</button>`;
                 } else if (u.recv_req_status === 'pending') {
-                    btnHtml = `<button class="btn btn-primary btn-sm" onclick="FriendsManager.acceptFromSearch(${u.id})">Accept Request</button>`;
+                    btnHtml = `<button class="btn btn-primary btn-sm" onclick="FriendsManager.acceptFromSearch(${userId})">Accept Request</button>`;
                 } else {
-                    btnHtml = `<button class="btn btn-primary btn-sm" onclick="FriendsManager.sendRequest(${u.id}, this)"><i class="fas fa-user-plus"></i> Add Friend</button>`;
+                    btnHtml = `<button class="btn btn-primary btn-sm" onclick="FriendsManager.sendRequest(${userId}, this)"><i class="fas fa-user-plus"></i> Add Friend</button>`;
                 }
 
+                const itemClick = (u.is_friend > 0) ? `onclick="openChatWith(${userId}, '${safeName}', '${safeAvatar}', '${safeStatus}')" style="cursor:pointer;"` : `style="cursor:default;"`;
+
                 html += `
-                    <div class="list-item" style="cursor:default;">
+                    <div class="list-item" id="friend-item-${userId}" ${itemClick}>
                         <div class="avatar avatar-md">
                             <img src="${avatar}" alt="${escapeHtml(u.fullname)}" onerror="this.src='assets/images/default-avatar.png'">
                             <span class="status-dot ${u.status}"></span>
@@ -145,6 +155,26 @@ class FriendsManager {
                 if (itemEl) itemEl.remove();
             } else {
                 showToast(data.message || 'Could not reject request', 'error');
+            }
+        } catch (e) {
+            showToast('Network error', 'error');
+        }
+    }
+
+    static async acceptFromSearch(userId) {
+        try {
+            const res = await fetch('api/friends/accept-request.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friend_id: userId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Friend request accepted!', 'success');
+                if (typeof loadFriendsList === 'function') loadFriendsList();
+                if (typeof loadChatsList === 'function') loadChatsList();
+            } else {
+                showToast(data.message || 'Could not accept request', 'error');
             }
         } catch (e) {
             showToast('Network error', 'error');

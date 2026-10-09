@@ -1,6 +1,6 @@
 /* assets/css/responsive.css - Breakpoints: 320px, 768px, 1024px+ */
 
-@media (max-width: 767px) {
+@media (max-width: 900px) {
     .nav-rail {
         display: none;
     }
@@ -77,7 +77,7 @@
     }
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (min-width: 901px) and (max-width: 1023px) {
     .middle-panel {
         width: 300px;
     }

@@ -17,6 +17,21 @@ if (!$currentUser) {
     exit;
 }
 
+require_once __DIR__ . '/models/Friend.php';
+
+// Release session write lock early so parallel AJAX calls are never blocked
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+
+$friendModel = new Friend();
+$initialFriends = [];
+try {
+    $initialFriends = $friendModel->getFriendsList((int)$currentUser['id']);
+} catch (Throwable $e) {
+    $initialFriends = [];
+}
+
 $settingModel = new SystemSetting();
 $screenshotSetting = $settingModel->get('screenshot_detection', '1');
 
@@ -40,14 +55,324 @@ $userAvatar = $currentUser['profile_image'] ?
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Stylesheets -->
-    <link rel="stylesheet" href="assets/css/variables.css">
-    <link rel="stylesheet" href="assets/css/reset.css">
-    <link rel="stylesheet" href="assets/css/style.css">
-    <link rel="stylesheet" href="assets/css/dashboard.css">
-    <link rel="stylesheet" href="assets/css/chat.css">
-    <link rel="stylesheet" href="assets/css/calls.css">
-    <link rel="stylesheet" href="assets/css/responsive.css">
+    <!-- Stylesheets with Cache Busting -->
+    <link rel="stylesheet" href="assets/css/variables.css?v=<?= @filemtime(__DIR__ . '/assets/css/variables.css') ?: time() ?>">
+    <link rel="stylesheet" href="assets/css/reset.css?v=<?= @filemtime(__DIR__ . '/assets/css/reset.css') ?: time() ?>">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= @filemtime(__DIR__ . '/assets/css/style.css') ?: time() ?>">
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=<?= @filemtime(__DIR__ . '/assets/css/dashboard.css') ?: time() ?>">
+    <link rel="stylesheet" href="assets/css/messages.css?v=<?= @filemtime(__DIR__ . '/assets/css/messages.css') ?: time() ?>">
+    <link rel="stylesheet" href="assets/css/calls.css?v=<?= @filemtime(__DIR__ . '/assets/css/calls.css') ?: time() ?>">
+    <link rel="stylesheet" href="assets/css/responsive.css?v=<?= @filemtime(__DIR__ . '/assets/css/responsive.css') ?: time() ?>">
+
+    <!-- Inline Resilient Global Utilities & Navigation Stubs -->
+    <script>
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+        window.escapeHtml = escapeHtml;
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const parts = String(dateStr).trim().split(/[- :T]/);
+                if (parts.length >= 5) {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const mIdx = parseInt(parts[1], 10) - 1;
+                    const month = months[mIdx] || parts[1];
+                    const day = parseInt(parts[2], 10);
+                    let hour = parseInt(parts[3], 10);
+                    const minute = parts[4];
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    hour = hour % 12;
+                    hour = hour ? hour : 12;
+                    return `${month} ${day}, ${hour}:${minute} ${ampm}`;
+                }
+                const d = new Date(String(dateStr).replace(' ', 'T'));
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return '';
+            }
+        }
+        window.formatDate = formatDate;
+
+        function formatTime(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const parts = String(dateStr).trim().split(/[- :T]/);
+                if (parts.length >= 5) {
+                    let hour = parseInt(parts[3], 10);
+                    const minute = parts[4];
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    hour = hour % 12;
+                    hour = hour ? hour : 12;
+                    return `${hour}:${minute} ${ampm}`;
+                }
+                const d = new Date(String(dateStr).replace(' ', 'T'));
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return '';
+            }
+        }
+        window.formatTime = formatTime;
+
+        function closeActiveChat() {
+            const container = document.querySelector('.app-container');
+            if (container) container.classList.remove('chat-open');
+        }
+        window.closeActiveChat = closeActiveChat;
+
+        window.activeFriendId = null;
+
+        function openChatWith(id, name, avatar, status) {
+            if (!id) return;
+            id = parseInt(id);
+            window.activeFriendId = id;
+
+            // 1. Force UI switch immediately - 0ms delay!
+            const appContainer = document.querySelector('.app-container');
+            if (appContainer) appContainer.classList.add('chat-open');
+
+            const emptyState = document.getElementById('chatEmptyState');
+            if (emptyState) emptyState.style.setProperty('display', 'none', 'important');
+
+            const activeChatView = document.getElementById('activeChatView');
+            if (activeChatView) activeChatView.style.setProperty('display', 'flex', 'important');
+
+            const mainStage = document.querySelector('.main-stage');
+            if (mainStage) mainStage.style.setProperty('display', 'flex', 'important');
+
+            // 2. Discover user info from cache, DOM, or params
+            if ((!name || !avatar) && window.friendsCache && window.friendsCache[id]) {
+                const u = window.friendsCache[id];
+                name = name || u.fullname;
+                avatar = avatar || (typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(u.profile_image) : (u.profile_image || 'assets/images/default-avatar.png'));
+                status = status || (u.status || 'offline');
+            }
+            if (!name || !avatar) {
+                const el = document.getElementById('chat-item-' + id) || document.getElementById('friend-item-' + id);
+                if (el) {
+                    const nEl = el.querySelector('.list-item-name');
+                    if (nEl && !name) name = nEl.textContent.trim();
+                    const aImg = el.querySelector('img');
+                    if (aImg && !avatar) avatar = aImg.src;
+                    const dot = el.querySelector('.status-dot');
+                    if (dot && !status) status = dot.classList.contains('online') ? 'online' : 'offline';
+                }
+            }
+            name = name || 'Chat';
+            avatar = avatar || 'assets/images/default-avatar.png';
+            status = status || 'offline';
+
+            // 3. Update Chat Header immediately
+            const nameEl = document.getElementById('chatHeaderName');
+            if (nameEl) nameEl.textContent = name;
+
+            const headerAvatar = document.getElementById('chatHeaderAvatar');
+            if (headerAvatar) {
+                headerAvatar.onerror = function() { headerAvatar.onerror = null; headerAvatar.src = 'assets/images/default-avatar.png'; };
+                headerAvatar.src = typeof window.resolveAvatarUrl === 'function' ? window.resolveAvatarUrl(avatar) : avatar;
+            }
+
+            const statusEl = document.getElementById('chatHeaderStatus');
+            if (statusEl) {
+                statusEl.className = 'chat-header-status ' + status;
+                statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> ' + (status === 'online' ? 'Online' : 'Offline');
+            }
+
+            // 4. Highlight active list item
+            document.querySelectorAll('.list-item.active').forEach(e => e.classList.remove('active'));
+            const activeItem = document.getElementById('chat-item-' + id) || document.getElementById('friend-item-' + id);
+            if (activeItem) activeItem.classList.add('active');
+
+            // 5. Enable and focus message input field
+            const inputField = document.getElementById('chatInputField');
+            if (inputField) {
+                inputField.disabled = false;
+                setTimeout(() => {
+                    try { inputField.focus(); } catch (e) {}
+                }, 50);
+            }
+
+            // 6. Delegate to ChatManager or fallback message fetcher
+            if (!window.chatManager && typeof ChatManager === 'function') {
+                try { window.chatManager = new ChatManager(); } catch (e) { console.error(e); }
+            }
+
+            if (window.chatManager && typeof window.chatManager.openConversation === 'function') {
+                window.chatManager.openConversation(id, name, avatar, status);
+            } else {
+                loadMessagesFallback(id);
+            }
+        }
+        window.openChatWith = openChatWith;
+        window._openChatWithImpl = openChatWith;
+
+        function startCall(type) {
+            type = (type === 'video') ? 'video' : 'voice';
+            let friendId = window.activeFriendId;
+            let friendName = 'A/N User';
+            let friendAvatar = 'assets/images/default-avatar.png';
+            let isOffline = true;
+
+            if (window.chatManager && window.chatManager.activeFriend) {
+                friendId = window.chatManager.activeFriend.id;
+                friendName = window.chatManager.activeFriend.name || friendName;
+                friendAvatar = window.chatManager.activeFriend.avatar || friendAvatar;
+                isOffline = (window.chatManager.activeFriend.status !== 'online');
+            } else if (friendId) {
+                const headerName = document.getElementById('chatHeaderName');
+                if (headerName && headerName.textContent.trim()) {
+                    friendName = headerName.textContent.trim();
+                }
+                const headerAvatar = document.getElementById('chatHeaderAvatar');
+                if (headerAvatar && headerAvatar.src) {
+                    friendAvatar = headerAvatar.src;
+                }
+                const statusDot = document.getElementById('chatHeaderStatus');
+                if (statusDot && statusDot.classList.contains('online')) {
+                    isOffline = false;
+                }
+            }
+
+            if (!friendId) {
+                if (typeof showToast === 'function') {
+                    showToast('Fadlan marka hore dooro qofka aad rabto inaad wacdo!', 'warning');
+                } else {
+                    alert('Fadlan marka hore dooro qofka aad rabto inaad wacdo!');
+                }
+                return;
+            }
+
+            if (!window.callController && typeof CallController === 'function') {
+                try { window.callController = new CallController(); } catch (e) { console.error(e); }
+            }
+            if (!window.webrtc && typeof WebRTCManager === 'function') {
+                try { window.webrtc = new WebRTCManager(window.wsClient || null); } catch (e) { console.error(e); }
+            }
+
+            if (window.callController) {
+                window.callController.startOutgoingCall(friendName, friendAvatar, type, isOffline);
+            }
+            if (window.webrtc) {
+                window.webrtc.initiateCall(friendId, type);
+            }
+        }
+        window.startCall = startCall;
+
+        async function loadMessagesFallback(friendId) {
+            const container = document.getElementById('chatMessages');
+            if (!container) return;
+            container.innerHTML = '<div style="display:flex;justify-content:center;padding:40px;"><div class="spinner"></div></div>';
+            try {
+                const res = await fetch('api/messages/fetch.php?friend_id=' + friendId);
+                const data = await res.json();
+                if (window.chatManager && typeof window.chatManager.openConversation === 'function') {
+                    window.chatManager.openConversation(friendId);
+                    return;
+                }
+                if (!data.success || !data.data || data.data.length === 0) {
+                    container.innerHTML = '<div class="empty-state" style="margin:auto;"><div class="empty-state-icon"><i class="fas fa-hand-wave"></i></div><div class="empty-state-title">Ku bilow fariin!</div><div class="empty-state-desc">U dir fariin qoraal ah si aad u bilowdo sheekada.</div></div>';
+                    return;
+                }
+                container.innerHTML = '';
+                data.data.forEach(msg => {
+                    const isMine = (parseInt(msg.sender_id) === parseInt(window.CURRENT_USER ? window.CURRENT_USER.id : 0));
+                    const row = document.createElement('div');
+                    row.className = 'message-row ' + (isMine ? 'mine' : 'theirs');
+                    row.id = 'msg-row-' + msg.id;
+                    const isRead = (msg.is_read == 1);
+                    const ticksHtml = isMine ? `<span class="bubble-ticks ${isRead ? 'read' : ''}">${isRead ? '✓✓' : (msg.is_delivered == 1 ? '✓✓' : '✓')}</span>` : '';
+                    row.innerHTML = `<div class="message-bubble"><div class="bubble-text">${escapeHtml(msg.message || '')}</div><div class="bubble-meta"><span>${formatTime(msg.created_at)}</span>${ticksHtml}</div></div>`;
+                    container.appendChild(row);
+                });
+                container.scrollTop = container.scrollHeight;
+            } catch (err) {
+                console.error('Fallback fetch error:', err);
+                if (container) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-desc">Cillad fariimaha soo qaadistooda ah.</div></div>';
+                }
+            }
+        }
+        window.loadMessagesFallback = loadMessagesFallback;
+
+        async function sendChatMessage() {
+            if (window.chatManager && typeof window.chatManager.sendMessage === 'function') {
+                return window.chatManager.sendMessage();
+            }
+            const input = document.getElementById('chatInputField');
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text) return;
+            const friendId = window.activeFriendId || (window.chatManager && window.chatManager.activeFriend ? window.chatManager.activeFriend.id : null);
+            if (!friendId) {
+                if (typeof showToast === 'function') showToast('Fadlan marka hore dooro qofka aad la hadleyso', 'info');
+                return;
+            }
+            input.value = '';
+            input.style.height = 'auto';
+
+            try {
+                const res = await fetch('api/messages/send.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        receiver_id: parseInt(friendId),
+                        message: text,
+                        message_type: 'text'
+                    })
+                });
+                const data = await res.json();
+                if (data.success && data.data) {
+                    const container = document.getElementById('chatMessages');
+                    if (container) {
+                        const empty = container.querySelector('.empty-state');
+                        if (empty) empty.remove();
+                        const row = document.createElement('div');
+                        row.className = 'message-row mine';
+                        row.id = 'msg-row-' + data.data.id;
+                        row.innerHTML = `<div class="message-bubble"><div class="bubble-text">${escapeHtml(data.data.message)}</div><div class="bubble-meta"><span>${formatTime(data.data.created_at || new Date())}</span><span class="bubble-ticks">✓</span></div></div>`;
+                        container.appendChild(row);
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    input.value = text;
+                    if (typeof showToast === 'function') showToast(data.message || 'Fariinta ma dirmin', 'error');
+                }
+            } catch (err) {
+                input.value = text;
+                if (typeof showToast === 'function') showToast('Cillad xiriirka ah', 'error');
+            }
+        }
+        window.sendChatMessage = sendChatMessage;
+
+        function switchTab(tab) {
+            if (window._switchTabImpl) return window._switchTabImpl(tab);
+            document.querySelectorAll('.nav-item, .bottom-nav-item').forEach(el => {
+                el.classList.toggle('active', el.getAttribute('data-tab') === tab);
+            });
+            if (window.loadChatsList && tab === 'chats') window.loadChatsList();
+            if (window.loadFriendsList && tab === 'friends') window.loadFriendsList();
+            if (window.loadCallsList && tab === 'calls') window.loadCallsList();
+            if (tab === 'profile') openProfileModal();
+            if (tab === 'settings') openSettingsModal();
+        }
+        function toggleAppTheme() {
+            if (window._toggleThemeImpl) return window._toggleThemeImpl();
+            document.documentElement.classList.toggle('dark');
+        }
+        function openProfileModal() {
+            const m = document.getElementById('profileEditModal');
+            if (m) m.classList.add('active');
+        }
+        function openSettingsModal() {
+            const m = document.getElementById('settingsModal');
+            if (m) m.classList.add('active');
+        }
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -56,35 +381,35 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- ============================================== -->
         <aside class="nav-rail">
             <div class="brand-badge" title="A/N Chat">
-                <img src="assets/images/logo.png" alt="A/N Chat">
+                <img src="assets/images/logo.png" alt="A/N Chat" onerror="this.onerror=null; this.src='assets/images/logo.jpg';">
             </div>
 
             <nav class="nav-rail-menu">
-                <button class="nav-item active" data-tab="chats" title="Chats">
+                <button class="nav-item active" data-tab="chats" title="Chats" onclick="switchTab('chats')">
                     <i class="fas fa-comment-dots"></i>
                 </button>
-                <button class="nav-item" data-tab="friends" title="Friends">
+                <button class="nav-item" data-tab="friends" title="Friends" onclick="switchTab('friends')">
                     <i class="fas fa-user-friends"></i>
                 </button>
-                <button class="nav-item" data-tab="calls" title="Calls">
+                <button class="nav-item" data-tab="calls" title="Calls" onclick="switchTab('calls')">
                     <i class="fas fa-phone-alt"></i>
                 </button>
-                <button class="nav-item" data-tab="notifications" title="Notifications">
+                <button class="nav-item" data-tab="notifications" title="Notifications" onclick="switchTab('notifications')">
                     <i class="fas fa-bell"></i>
                     <span class="badge notif-badge" style="display:none;">0</span>
                 </button>
             </nav>
 
             <div class="nav-rail-bottom">
-                <button class="nav-item" id="btnToggleTheme" title="Toggle Light/Dark Theme">
+                <button class="nav-item" id="btnToggleTheme" title="Toggle Light/Dark Theme" onclick="toggleAppTheme()">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="nav-item" data-tab="profile" title="Profile">
+                <button class="nav-item" data-tab="profile" title="Profile" onclick="openProfileModal()">
                     <div class="avatar avatar-sm">
                         <img src="<?= htmlspecialchars($userAvatar) ?>" alt="<?= htmlspecialchars($currentUser['fullname']) ?>" onerror="this.src='assets/images/default-avatar.png'">
                     </div>
                 </button>
-                <button class="nav-item" data-tab="settings" title="Settings">
+                <button class="nav-item" data-tab="settings" title="Settings" onclick="openSettingsModal()">
                     <i class="fas fa-cog"></i>
                 </button>
                 <?php if (!empty($currentUser['is_admin'])): ?>
@@ -105,10 +430,10 @@ $userAvatar = $currentUser['profile_image'] ?
             <div class="middle-header">
                 <h2 class="middle-title" id="middlePanelTitle">Chats</h2>
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <button class="btn-icon" id="btnRefreshList" title="Refresh" onclick="loadChatsList()">
+                    <button class="btn-icon" id="btnRefreshList" title="Refresh" onclick="refreshCurrentTab()">
                         <i class="fas fa-redo-alt" style="font-size:14px;"></i>
                     </button>
-                    <button class="btn-icon" title="New Chat / Find Friend" onclick="document.querySelector('[data-tab=friends]').click()">
+                    <button class="btn-icon" title="New Chat / Find Friend" onclick="switchTab('friends')">
                         <i class="fas fa-user-plus" style="font-size:14px;"></i>
                     </button>
                 </div>
@@ -122,7 +447,49 @@ $userAvatar = $currentUser['profile_image'] ?
             </div>
 
             <div class="list-container" id="middleListContainer">
-                <!-- Dynamically populated via JavaScript -->
+                <?php if (empty($initialFriends)): ?>
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-comments"></i></div>
+                        <div class="empty-state-title">No chats yet</div>
+                        <div class="empty-state-desc">You don't have any chats yet. Search for friends by phone number to start chatting.</div>
+                        <button class="btn btn-primary btn-sm" onclick="switchTab('friends')">Find Friends</button>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($initialFriends as $f): 
+                        $fid = (int)$f['id'];
+                        $fAvatar = !empty($f['profile_image']) ? 
+                            (str_starts_with($f['profile_image'], 'http') || str_starts_with($f['profile_image'], 'assets/') || str_starts_with($f['profile_image'], 'uploads/') 
+                                ? $f['profile_image'] 
+                                : 'uploads/images/' . $f['profile_image']) : 
+                            'assets/images/default-avatar.png';
+                        $fUnread = (int)($f['unread_count'] ?? 0);
+                        $preview = $f['last_message'] ?: 'Start chatting...';
+                        if (($f['last_message_type'] ?? '') === 'image') $preview = '📷 Photo';
+                        if (($f['last_message_type'] ?? '') === 'video') $preview = '🎥 Video';
+                        if (($f['last_message_type'] ?? '') === 'voice') $preview = '🎤 Voice message';
+                        if (($f['last_message_type'] ?? '') === 'document') $preview = '📄 Document';
+                        $timeStr = !empty($f['last_message_time']) ? date('M j, H:i', strtotime($f['last_message_time'])) : '';
+                    ?>
+                    <div class="list-item" id="chat-item-<?= $fid ?>" onclick="openChatWith(<?= $fid ?>, '<?= addslashes(htmlspecialchars($f['fullname'])) ?>', '<?= addslashes(htmlspecialchars($fAvatar)) ?>', '<?= addslashes(htmlspecialchars($f['status'] ?? 'offline')) ?>')" style="cursor:pointer;">
+                        <div class="avatar avatar-md">
+                            <img src="<?= htmlspecialchars($fAvatar) ?>" alt="<?= htmlspecialchars($f['fullname']) ?>" onerror="this.src='assets/images/default-avatar.png'">
+                            <span class="status-dot <?= htmlspecialchars($f['status'] ?? 'offline') ?>" id="status-dot-<?= $fid ?>"></span>
+                        </div>
+                        <div class="list-item-content">
+                            <div class="list-item-top">
+                                <span class="list-item-name"><?= htmlspecialchars($f['fullname']) ?></span>
+                                <span class="list-item-time"><?= htmlspecialchars($timeStr) ?></span>
+                            </div>
+                            <div class="list-item-bottom">
+                                <span class="list-item-preview <?= $fUnread > 0 ? 'unread' : '' ?>"><?= htmlspecialchars($preview) ?></span>
+                                <?php if ($fUnread > 0): ?>
+                                    <span class="badge"><?= $fUnread ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </section>
 
@@ -132,11 +499,11 @@ $userAvatar = $currentUser['profile_image'] ?
         <main class="main-stage">
             <!-- Empty / Welcome state -->
             <div id="chatEmptyState" class="empty-state" style="margin:auto;max-width:440px;">
-                <img src="assets/images/logo.png" alt="A/N Chat" style="width:96px;height:96px;border-radius:40px;object-fit:cover;border:3px solid #ffffff;box-shadow:var(--shadow);margin-bottom:12px;">
+                <img src="assets/images/logo.png" alt="A/N Chat" onerror="this.onerror=null; this.src='assets/images/logo.jpg';" style="width:96px;height:96px;border-radius:40px;object-fit:cover;border:3px solid #ffffff;box-shadow:var(--shadow);margin-bottom:12px;">
                 <h1 style="font-size:26px;font-weight:800;color:var(--primary);">A/N Chat</h1>
                 <p style="font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Connect. Chat. Call. Share.</p>
                 <div class="empty-state-desc">Select a friend from the left sidebar or search a phone number to start instant real-time messaging, voice, or video calling.</div>
-                <button class="btn btn-primary btn-sm" style="margin-top:14px;" onclick="document.querySelector('[data-tab=friends]').click()">
+                <button class="btn btn-primary btn-sm" style="margin-top:14px;" onclick="switchTab('friends')">
                     <i class="fas fa-search"></i> Find Friends by Phone
                 </button>
             </div>
@@ -146,7 +513,7 @@ $userAvatar = $currentUser['profile_image'] ?
                 <!-- Chat Header -->
                 <header class="chat-header">
                     <div class="chat-header-user">
-                        <button class="btn-icon chat-back-btn" id="chatBackBtn" title="Back to Chats">
+                        <button class="btn-icon chat-back-btn" id="chatBackBtn" title="Back to Chats" onclick="closeActiveChat()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         <div class="avatar avatar-md">
@@ -161,10 +528,10 @@ $userAvatar = $currentUser['profile_image'] ?
                     </div>
 
                     <div class="chat-header-actions">
-                        <button class="btn-icon" id="btnStartVoiceCall" title="Start Voice Call" style="color:var(--primary);">
+                        <button class="btn-icon" id="btnStartVoiceCall" title="Start Voice Call" style="color:var(--primary);" onclick="startCall('voice')">
                             <i class="fas fa-phone-alt"></i>
                         </button>
-                        <button class="btn-icon" id="btnStartVideoCall" title="Start Video Call" style="color:var(--primary);">
+                        <button class="btn-icon" id="btnStartVideoCall" title="Start Video Call" style="color:var(--primary);" onclick="startCall('video')">
                             <i class="fas fa-video"></i>
                         </button>
                         <div style="position:relative;">
@@ -238,7 +605,7 @@ $userAvatar = $currentUser['profile_image'] ?
                     </div>
 
                     <!-- Message Textarea -->
-                    <textarea id="chatInputField" class="chat-input-field" placeholder="Type a message..." rows="1"></textarea>
+                    <textarea id="chatInputField" class="chat-input-field" placeholder="Type a message..." rows="1" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendChatMessage(); }"></textarea>
 
                     <!-- Voice Record Mic -->
                     <button class="btn-icon" id="btnVoiceRecord" title="Record Voice Message" style="color:var(--primary);">
@@ -246,7 +613,7 @@ $userAvatar = $currentUser['profile_image'] ?
                     </button>
 
                     <!-- Send Button (Pink) -->
-                    <button class="send-btn" id="btnSendMessage" title="Send Message">
+                    <button class="send-btn" id="btnSendMessage" title="Send Message" onclick="sendChatMessage();">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </footer>
@@ -257,24 +624,24 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- 4. BOTTOM MOBILE NAVIGATION                   -->
         <!-- ============================================== -->
         <nav class="bottom-nav">
-            <button class="bottom-nav-item active" data-tab="chats">
+            <button class="bottom-nav-item active" data-tab="chats" onclick="switchTab('chats')">
                 <i class="fas fa-comment-dots"></i>
                 <span>Chats</span>
             </button>
-            <button class="bottom-nav-item" data-tab="friends">
+            <button class="bottom-nav-item" data-tab="friends" onclick="switchTab('friends')">
                 <i class="fas fa-user-friends"></i>
                 <span>Friends</span>
             </button>
-            <button class="bottom-nav-item" data-tab="calls">
+            <button class="bottom-nav-item" data-tab="calls" onclick="switchTab('calls')">
                 <i class="fas fa-phone-alt"></i>
                 <span>Calls</span>
             </button>
-            <button class="bottom-nav-item" data-tab="notifications">
+            <button class="bottom-nav-item" data-tab="notifications" onclick="switchTab('notifications')">
                 <i class="fas fa-bell"></i>
                 <span>Alerts</span>
                 <span class="badge notif-badge" style="display:none;">0</span>
             </button>
-            <button class="bottom-nav-item" data-tab="profile">
+            <button class="bottom-nav-item" data-tab="profile" onclick="openProfileModal()">
                 <i class="fas fa-user"></i>
                 <span>Profile</span>
             </button>
@@ -516,7 +883,7 @@ $userAvatar = $currentUser['profile_image'] ?
     </div>
 
     <!-- Emoji Popover -->
-    <div id="emojiPickerPopover" class="attachment-popover" style="bottom:64px;left:16px;max-width:280px;flex-direction:row;flex-wrap:wrap;padding:12px;gap:8px;">
+    <div id="emojiPickerPopover" class="attachment-popover" style="display:none;bottom:64px;left:16px;max-width:280px;flex-direction:row;flex-wrap:wrap;padding:12px;gap:8px;">
         <span class="reaction-opt" onclick="insertEmoji('😊')">😊</span>
         <span class="reaction-opt" onclick="insertEmoji('👋')">👋</span>
         <span class="reaction-opt" onclick="insertEmoji('❤️')">❤️</span>
@@ -568,9 +935,20 @@ $userAvatar = $currentUser['profile_image'] ?
             screenshot_detection: <?= json_encode($screenshotSetting) ?>
         };
 
+        window.initialFriendsData = <?= json_encode($initialFriends, JSON_UNESCAPED_SLASHES) ?>;
+        if (Array.isArray(window.initialFriendsData)) {
+            window.friendsCache = window.friendsCache || {};
+            window.initialFriendsData.forEach(f => {
+                window.friendsCache[parseInt(f.id)] = f;
+            });
+        }
+
         function toggleEmojiPicker(btn) {
             const p = document.getElementById('emojiPickerPopover');
-            if (p) p.classList.toggle('active');
+            if (p) {
+                p.classList.toggle('active');
+                p.style.display = p.classList.contains('active') ? 'flex' : 'none';
+            }
         }
 
         function insertEmoji(char) {
@@ -580,7 +958,10 @@ $userAvatar = $currentUser['profile_image'] ?
                 input.focus();
             }
             const p = document.getElementById('emojiPickerPopover');
-            if (p) p.classList.remove('active');
+            if (p) {
+                p.classList.remove('active');
+                p.style.display = 'none';
+            }
         }
 
         function openBlockModal() {
@@ -622,18 +1003,18 @@ $userAvatar = $currentUser['profile_image'] ?
         }
     </script>
 
-    <!-- Application Scripts -->
-    <script src="assets/js/auth.js"></script>
-    <script src="assets/js/pwa.js"></script>
-    <script src="assets/js/upload.js"></script>
-    <script src="assets/js/recorder.js"></script>
-    <script src="assets/js/webrtc.js"></script>
-    <script src="assets/js/calls.js"></script>
-    <script src="assets/js/friends.js"></script>
-    <script src="assets/js/notifications.js"></script>
-    <script src="assets/js/chat.js"></script>
-    <script src="assets/js/privacy-shield.js"></script>
-    <script src="assets/js/app.js"></script>
+    <!-- Application Scripts with Cache Busting -->
+    <script src="assets/js/auth.js?v=<?= @filemtime(__DIR__ . '/assets/js/auth.js') ?: time() ?>"></script>
+    <script src="assets/js/pwa.js?v=<?= @filemtime(__DIR__ . '/assets/js/pwa.js') ?: time() ?>"></script>
+    <script src="assets/js/upload.js?v=<?= @filemtime(__DIR__ . '/assets/js/upload.js') ?: time() ?>"></script>
+    <script src="assets/js/recorder.js?v=<?= @filemtime(__DIR__ . '/assets/js/recorder.js') ?: time() ?>"></script>
+    <script src="assets/js/webrtc.js?v=<?= @filemtime(__DIR__ . '/assets/js/webrtc.js') ?: time() ?>"></script>
+    <script src="assets/js/calls.js?v=<?= @filemtime(__DIR__ . '/assets/js/calls.js') ?: time() ?>"></script>
+    <script src="assets/js/friends.js?v=<?= @filemtime(__DIR__ . '/assets/js/friends.js') ?: time() ?>"></script>
+    <script src="assets/js/notifications.js?v=<?= @filemtime(__DIR__ . '/assets/js/notifications.js') ?>"></script>
+    <script src="assets/js/messages.js?v=<?= @filemtime(__DIR__ . '/assets/js/messages.js') ?: time() ?>"></script>
+    <script src="assets/js/privacy-shield.js?v=<?= @filemtime(__DIR__ . '/assets/js/privacy-shield.js') ?: time() ?>"></script>
+    <script src="assets/js/app.js?v=<?= @filemtime(__DIR__ . '/assets/js/app.js') ?: time() ?>"></script>
 </body>
 </html>
 

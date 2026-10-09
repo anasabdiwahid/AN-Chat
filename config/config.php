@@ -1,6 +1,9 @@
 <?php
 // config/config.php - Global Application Configuration
 
+// Set timezone to Africa/Mogadishu (UTC+3)
+date_default_timezone_set('Africa/Mogadishu');
+
 // Start secure session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     // Set secure cookie parameters
@@ -21,14 +24,17 @@ define('APP_NAME', 'A/N Chat');
 define('APP_TAGLINE', 'Connect. Chat. Call. Share.');
 define('APP_VERSION', '1.0.0');
 
-// Detect Base URL dynamically for portability across XAMPP subdirectories
+// Detect Base URL dynamically for portability across local XAMPP and live hosting (InfinityFree)
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-// Normalize basePath so it points to the root of /chats/
-$scriptDirParts = explode('/', trim($scriptDir, '/'));
-$baseFolder = !empty($scriptDirParts[0]) ? '/' . $scriptDirParts[0] : '';
-define('BASE_URL', $protocol . $host . $baseFolder);
+$scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+
+// If running in /chats/ subdirectory (like local XAMPP), include /chats; otherwise root
+$baseFolder = '';
+if (strpos($scriptName, '/chats/') !== false || strpos($scriptName, '/chats') === 0) {
+    $baseFolder = '/chats';
+}
+define('BASE_URL', rtrim($protocol . $host . $baseFolder, '/'));
 define('BASE_PATH', dirname(__DIR__));
 
 // Upload Configurations
@@ -84,13 +90,19 @@ function requireAuth(): array {
     if (empty($_SESSION['user_id'])) {
         jsonResponse(false, 'Unauthorized. Please log in.', null, 401);
     }
-    return [
+    $auth = [
         'id' => (int)$_SESSION['user_id'],
         'fullname' => $_SESSION['fullname'] ?? '',
         'phone' => $_SESSION['phone'] ?? '',
         'profile_image' => $_SESSION['profile_image'] ?? null,
         'is_admin' => (int)($_SESSION['is_admin'] ?? 0)
     ];
+
+    if (defined('API_REQUEST') && session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+
+    return $auth;
 }
 
 // Admin Authorization Check Helper

@@ -255,12 +255,14 @@
     padding: 20px;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
     transition: var(--transition);
 }
 
 .modal-overlay.active {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 .modal-card {
@@ -465,11 +467,9 @@
     }
 }
 
-/* Hide on mobile when active chat is open so it doesn't block inputs */
-@media (max-width: 767px) {
-    .app-container.chat-open .pwa-floating-install-container {
-        display: none !important;
-    }
+/* Hide floating install button whenever active chat is open so it NEVER blocks send button or typing inputs */
+.app-container.chat-open .pwa-floating-install-container {
+    display: none !important;
 }
 
 /* Desktop layout adjustment */

@@ -28,6 +28,9 @@ class CallController {
             btnAccept.addEventListener('click', async () => {
                 this.stopRingtone();
                 this.stopRingbackTone();
+                if (!window.webrtc && typeof WebRTCManager === 'function') {
+                    window.webrtc = new WebRTCManager(window.wsClient || null);
+                }
                 if (this.pendingIncomingPayload && window.webrtc) {
                     await window.webrtc.handleIncomingOffer(this.pendingIncomingPayload);
                     this.showActiveCallScreen(this.pendingIncomingPayload.call_type);
@@ -43,8 +46,17 @@ class CallController {
             btnDecline.addEventListener('click', () => {
                 this.stopRingtone();
                 this.stopRingbackTone();
+                if (!window.webrtc && typeof WebRTCManager === 'function') {
+                    window.webrtc = new WebRTCManager(window.wsClient || null);
+                }
                 if (this.pendingIncomingPayload && window.webrtc) {
                     window.webrtc.declineCall(this.pendingIncomingPayload.from_user_id, this.pendingIncomingPayload.call_id);
+                } else if (this.pendingIncomingPayload && this.pendingIncomingPayload.call_id) {
+                    fetch('api/calls/update.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ call_id: this.pendingIncomingPayload.call_id, status: 'declined' })
+                    }).catch(() => {});
                 }
                 this.hideCallOverlay();
             });
@@ -58,6 +70,9 @@ class CallController {
                     this.stopRingbackTone();
                     this.stopRingtone();
                     this.stopCallTimer();
+                    if (!window.webrtc && typeof WebRTCManager === 'function') {
+                        window.webrtc = new WebRTCManager(window.wsClient || null);
+                    }
                     if (window.webrtc) {
                         window.webrtc.endCall('ended', this.callSeconds);
                     }

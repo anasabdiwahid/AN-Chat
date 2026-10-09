@@ -112,11 +112,14 @@ if (!isset($systemSettings['screenshot_detection'])) {
 }
 
 // 4. Check for incoming call
+// Auto-expire any abandoned calls older than 50 seconds
+$db->exec("UPDATE calls SET status = 'missed' WHERE status = 'calling' AND TIMESTAMPDIFF(SECOND, created_at, NOW()) > 50");
+
 $stmtCall = $db->prepare("
     SELECT c.*, u.fullname AS caller_name, u.profile_image AS caller_image, u.phone AS caller_phone
     FROM calls c
     JOIN users u ON c.caller_id = u.id
-    WHERE c.receiver_id = :uid AND c.status = 'calling' AND c.created_at >= (NOW() - INTERVAL 45 SECOND)
+    WHERE c.receiver_id = :uid AND c.status = 'calling'
     ORDER BY c.id DESC LIMIT 1
 ");
 $stmtCall->execute([':uid' => $currentUserId]);

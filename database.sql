@@ -3,8 +3,10 @@
 -- Brand: A/N Chat (Connect. Chat. Call. Share.)
 -- ========================================================
 
-CREATE DATABASE IF NOT EXISTS `an_chat_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `an_chat_db`;
+-- Note for InfinityFree: Create your database in cPanel first (e.g. if0_43123386_anasnimca),
+-- then select it in phpMyAdmin and import this file.
+-- CREATE DATABASE IF NOT EXISTS `an_chat_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- USE `an_chat_db`;
 
 -- 1. USERS TABLE
 CREATE TABLE IF NOT EXISTS `users` (

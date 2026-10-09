@@ -729,6 +729,15 @@ class ChatManager {
 function formatTime(dateStr) {
     if (!dateStr) return '';
     try {
+        const parts = String(dateStr).trim().split(/[- :T]/);
+        if (parts.length >= 5) {
+            let hour = parseInt(parts[3], 10);
+            const minute = parts[4];
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            hour = hour % 12;
+            hour = hour ? hour : 12;
+            return `${hour}:${minute} ${ampm}`;
+        }
         const d = new Date(String(dateStr).replace(' ', 'T'));
         if (isNaN(d.getTime())) return '';
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -741,6 +750,19 @@ window.formatTime = formatTime;
 function formatDate(dateStr) {
     if (!dateStr) return '';
     try {
+        const parts = String(dateStr).trim().split(/[- :T]/);
+        if (parts.length >= 5) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const mIdx = parseInt(parts[1], 10) - 1;
+            const month = months[mIdx] || parts[1];
+            const day = parseInt(parts[2], 10);
+            let hour = parseInt(parts[3], 10);
+            const minute = parts[4];
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            hour = hour % 12;
+            hour = hour ? hour : 12;
+            return `${month} ${day}, ${hour}:${minute} ${ampm}`;
+        }
         const d = new Date(String(dateStr).replace(' ', 'T'));
         if (isNaN(d.getTime())) return '';
         return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
