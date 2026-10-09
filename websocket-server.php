@@ -2,28 +2,81 @@
 // websocket-server.php - A/N Chat Robust Real-Time WebSocket Server (RFC 6455)
 // Usage: php websocket-server.php
 
-require_once __DIR__ . '/config/database.php';
-require_once __DIR__ . '/models/User.php';
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 
 set_time_limit(0);
 ob_implicit_flush();
 
+$logFile = __DIR__ . '/websocket.log';
+
+function logMsg($msg) {
+    global $logFile;
+    $line = date('[Y-m-d H:i:s] ') . $msg . "\n";
+    echo $line;
+    @file_put_contents($logFile, $line, FILE_APPEND);
+}
+
+set_error_handler(function($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) {
+        return false; // Silently ignore @-suppressed errors (e.g. expected socket disconnects)
+    }
+    logMsg("[PHP Warning/Notice] $message in $file:$line");
+    return true;
+});
+
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        logMsg("[FATAL SHUTDOWN] " . json_encode($error));
+    } else {
+        logMsg("[SHUTDOWN] WebSocket process ended.");
+    }
+});
+
+require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/models/User.php';
+
 $host = '0.0.0.0';
 $port = 8085;
 
-$server = @stream_socket_server("tcp://$host:$port", $errno, $errstr);
+// Create server socket with SO_REUSEADDR
+$context = stream_context_create([
+    'socket' => [
+        'so_reuseport' => 1,
+        'so_reuseaddr' => 1,
+        'backlog' => 128
+    ]
+]);
+
+$server = @stream_socket_server("tcp://$host:$port", $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
 if (!$server) {
-    die("Error creating WebSocket server on $host:$port - $errstr ($errno)\n");
+    logMsg("Error creating WebSocket server on $host:$port - $errstr ($errno)");
+    exit(1);
 }
 
-echo "====================================================\n";
-echo "  A/N Chat - Real-Time WebSocket Server Active\n";
-echo "  Listening on ws://localhost:$port\n";
-echo "====================================================\n";
+stream_set_blocking($server, false);
+
+logMsg("====================================================");
+logMsg("  A/N Chat - Real-Time WebSocket Server Active");
+logMsg("  Listening on ws://localhost:$port");
+logMsg("====================================================");
 
 $sockets = [$server];
 $clients = []; // socketId => ['socket' => resource, 'handshake' => bool, 'user_id' => int|null, 'handshake_buffer' => string]
 $userSockets = []; // user_id => [socketId => resource]
+
+function updateUserStatusSafely($userId, $status) {
+    if (!$userId) return;
+    try {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("UPDATE users SET status = :status, last_seen = NOW() WHERE id = :id");
+        $stmt->execute([':status' => $status, ':id' => $userId]);
+    } catch (Throwable $e) {
+        logMsg("[DB Status Error] " . $e->getMessage());
+    }
+}
 
 function sendWebSocketFrame($clientSocket, $data, $opcode = 0x1) {
     if (!is_resource($clientSocket)) return false;
@@ -97,38 +150,41 @@ function decodeWebSocketFrame($payload) {
 
 function removeClient(&$sockets, &$clients, &$userSockets, $clientSocket) {
     $sockId = (int)$clientSocket;
+    $userId = null;
+
     if (isset($clients[$sockId])) {
         $userId = $clients[$sockId]['user_id'] ?? null;
-        if ($userId && isset($userSockets[$userId])) {
-            unset($userSockets[$userId][$sockId]);
-            if (empty($userSockets[$userId])) {
-                unset($userSockets[$userId]);
-                try {
-                    $userModel = new User();
-                    $userModel->updateStatus($userId, 'offline');
-                } catch (Throwable $e) {}
-
-                broadcastToAll($clients, [
-                    'type' => 'user_status',
-                    'user_id' => $userId,
-                    'status' => 'offline',
-                    'last_seen' => date('Y-m-d H:i:s')
-                ]);
-                echo "[Status] User #$userId is now offline\n";
-            }
-        }
         unset($clients[$sockId]);
     }
 
+    // Remove from $sockets list first
     $k = array_search($clientSocket, $sockets, true);
     if ($k !== false) {
         unset($sockets[$k]);
     }
 
+    // Close socket resource
     if (is_resource($clientSocket)) {
         @fclose($clientSocket);
     }
-    echo "[Disconnect] Client #$sockId disconnected\n";
+
+    if ($userId && isset($userSockets[$userId])) {
+        unset($userSockets[$userId][$sockId]);
+        if (empty($userSockets[$userId])) {
+            unset($userSockets[$userId]);
+            updateUserStatusSafely($userId, 'offline');
+
+            broadcastToAll($clients, [
+                'type' => 'user_status',
+                'user_id' => $userId,
+                'status' => 'offline',
+                'last_seen' => date('Y-m-d H:i:s')
+            ]);
+            logMsg("[Status] User #$userId is now offline");
+        }
+    }
+
+    logMsg("[Disconnect] Client #$sockId disconnected");
 }
 
 function broadcastToUser(&$userSockets, $userId, $payload) {
@@ -161,7 +217,7 @@ while (true) {
                 $validSockets[] = $s;
             }
         }
-        $sockets = $validSockets;
+        $sockets = array_values(array_unique($validSockets, SORT_REGULAR));
 
         // Ensure server socket is always present
         if (!in_array($server, $sockets, true)) {
@@ -191,7 +247,7 @@ while (true) {
                     'user_id' => null,
                     'handshake_buffer' => ''
                 ];
-                echo "[Connect] Client connected #$sockId\n";
+                logMsg("[Connect] Client connected #$sockId");
             }
             $key = array_search($server, $read, true);
             if ($key !== false) unset($read[$key]);
@@ -227,7 +283,7 @@ while (true) {
                 if (performHandshake($clientSocket, $clients[$sockId]['handshake_buffer'])) {
                     $clients[$sockId]['handshake'] = true;
                     $clients[$sockId]['handshake_buffer'] = '';
-                    echo "[Handshake] Handshake complete for client #$sockId\n";
+                    logMsg("[Handshake] Handshake complete for client #$sockId");
                 } else {
                     removeClient($sockets, $clients, $userSockets, $clientSocket);
                 }
@@ -279,10 +335,7 @@ while (true) {
                         }
                         $userSockets[$userId][$sockId] = $clientSocket;
 
-                        try {
-                            $userModel = new User();
-                            $userModel->updateStatus($userId, 'online');
-                        } catch (Throwable $e) {}
+                        updateUserStatusSafely($userId, 'online');
 
                         sendWebSocketFrame($clientSocket, json_encode([
                             'type' => 'auth_ok',
@@ -295,7 +348,7 @@ while (true) {
                             'status' => 'online',
                             'last_seen' => date('Y-m-d H:i:s')
                         ]);
-                        echo "[Auth] User #$userId authenticated on socket #$sockId\n";
+                        logMsg("[Auth] User #$userId authenticated on socket #$sockId");
                     }
                     break;
 
@@ -361,7 +414,7 @@ while (true) {
                             'notice' => $payload['notice'] ?? "⚠️ {$senderName} took a screenshot of this conversation.",
                             'time' => date('H:i')
                         ]);
-                        echo "[Privacy] Screenshot alert from #$senderId delivered to #$targetUserId\n";
+                        logMsg("[Privacy] Screenshot alert from #$senderId delivered to #$targetUserId");
                     }
                     break;
 
@@ -371,7 +424,7 @@ while (true) {
                         'key' => $payload['key'] ?? '',
                         'value' => $payload['value'] ?? ''
                     ]);
-                    echo "[Admin] Setting broadcast: " . ($payload['key'] ?? '') . "\n";
+                    logMsg("[Admin] Setting broadcast: " . ($payload['key'] ?? ''));
                     break;
 
                 case 'call_offer':
@@ -381,9 +434,8 @@ while (true) {
                         $payload['from_user_id'] = $callerId;
 
                         if (!empty($userSockets[$targetUserId])) {
-                            // User is connected on WebSocket
                             broadcastToUser($userSockets, $targetUserId, $payload);
-                            echo "[Signaling] call_offer delivered from #$callerId to #$targetUserId (Ringing)\n";
+                            logMsg("[Signaling] call_offer delivered from #$callerId to #$targetUserId (Ringing)");
 
                             sendWebSocketFrame($clientSocket, json_encode([
                                 'type' => 'call_status',
@@ -391,7 +443,7 @@ while (true) {
                                 'target_user_id' => $targetUserId
                             ]));
                         } else {
-                            echo "[Signaling] User #$targetUserId is offline on WS for call from #$callerId\n";
+                            logMsg("[Signaling] User #$targetUserId is offline on WS for call from #$callerId");
                             sendWebSocketFrame($clientSocket, json_encode([
                                 'type' => 'call_status',
                                 'status' => 'offline',
@@ -406,7 +458,7 @@ while (true) {
                     if ($targetUserId > 0) {
                         $payload['from_user_id'] = $clients[$sockId]['user_id'] ?? 0;
                         broadcastToUser($userSockets, $targetUserId, $payload);
-                        echo "[Signaling] call_request_offer forwarded to #$targetUserId\n";
+                        logMsg("[Signaling] call_request_offer forwarded to #$targetUserId");
                     }
                     break;
 
@@ -418,7 +470,7 @@ while (true) {
                     if ($targetUserId > 0) {
                         $payload['from_user_id'] = $clients[$sockId]['user_id'] ?? ($payload['caller_id'] ?? 0);
                         broadcastToUser($userSockets, $targetUserId, $payload);
-                        echo "[Signaling] {$type} forwarded from #{$payload['from_user_id']} to #$targetUserId\n";
+                        logMsg("[Signaling] {$type} forwarded from #{$payload['from_user_id']} to #$targetUserId");
                     }
                     break;
 
@@ -432,7 +484,7 @@ while (true) {
             }
         }
     } catch (Throwable $e) {
-        echo "[Server Loop Caught Exception] " . $e->getMessage() . " on line " . $e->getLine() . "\n";
+        logMsg("[Server Loop Caught Exception] " . $e->getMessage() . " on line " . $e->getLine());
         usleep(50000);
     }
 }
