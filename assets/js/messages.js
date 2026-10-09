@@ -12,6 +12,8 @@ class ChatManager {
         this.isTyping = false;
         this.audioPingCtx = null;
         this.highestMessageId = 0;
+        this.conversationPollTimer = null;
+        this.conversationPollInProgress = false;
 
         this.initEvents();
     }
@@ -179,6 +181,8 @@ class ChatManager {
     async openConversation(friendId, friendName, friendAvatar, friendStatus) {
         if (!friendId) return;
         friendId = parseInt(friendId);
+        if (this.conversationPollTimer) clearInterval(this.conversationPollTimer);
+        this.conversationPollTimer = null;
 
         // Auto lookup from cache if friendName or avatar missing
         if ((!friendName || !friendAvatar) && window.friendsCache && window.friendsCache[friendId]) {
@@ -249,6 +253,7 @@ class ChatManager {
         // 7. Load conversation messages
         this.highestMessageId = 0;
         await this.loadMessages(friendId);
+        this.startConversationPolling(friendId);
 
         // 8. Notify WebSocket that messages are read (if connected)
         if (window.wsClient && typeof window.wsClient.send === 'function') {
@@ -259,6 +264,39 @@ class ChatManager {
                 });
             } catch (e) {}
         }
+    }
+
+    startConversationPolling(friendId) {
+        const poll = async () => {
+            if (this.conversationPollInProgress || !this.activeFriend || parseInt(this.activeFriend.id) !== friendId) return;
+            this.conversationPollInProgress = true;
+            try {
+                const afterId = parseInt(this.highestMessageId) || 0;
+                const response = await fetch(`api/messages/fetch.php?friend_id=${friendId}&after_id=${afterId}`, { cache: 'no-store' });
+                if (!response.ok) return;
+                const result = await response.json();
+                if (!result.success || !Array.isArray(result.data)) return;
+                let gotIncoming = false;
+                result.data.forEach(message => {
+                    if (!document.getElementById(`msg-row-${message.id}`)) {
+                        this.appendMessage(message, true);
+                        if (parseInt(message.sender_id) !== parseInt(window.CURRENT_USER.id)) gotIncoming = true;
+                    }
+                });
+                if (gotIncoming) {
+                    this.playMessagePing();
+                    if (window.wsClient && typeof window.wsClient.send === 'function') {
+                        window.wsClient.send({ type: 'message_read', sender_id: friendId });
+                    }
+                }
+            } catch (error) {
+                // Keep polling; the next interval retries automatically.
+            } finally {
+                this.conversationPollInProgress = false;
+            }
+        };
+        poll();
+        this.conversationPollTimer = setInterval(poll, 1000);
     }
 
     async loadMessages(friendId) {
@@ -778,4 +816,3 @@ function formatDate(dateStr) {
 window.formatDate = formatDate;
 
 window.ChatManager = ChatManager;
-

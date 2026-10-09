@@ -22,8 +22,10 @@ $readMessageIds = [];
 $deletedMessageIds = [];
 
 if ($activeFriendId > 0) {
-    // If client specified a last_msg_id, fetch any newly arrived messages
-    if ($lastMsgId > 0) {
+    // Fetch newly arrived messages even when the conversation is empty and its
+    // client-side cursor is still zero. Otherwise polling never sees the first
+    // message when the WebSocket service is unavailable.
+    if ($lastMsgId >= 0) {
         $stmt = $db->prepare("
             SELECT m.*, 
                    u.fullname AS sender_name, u.profile_image AS sender_image,
@@ -35,6 +37,7 @@ if ($activeFriendId > 0) {
               AND ((m.sender_id = :fid AND m.receiver_id = :uid) OR (m.sender_id = :uid2 AND m.receiver_id = :fid2))
               AND (m.deleted_for_all = 0 OR m.deleted_for_all IS NULL)
             ORDER BY m.id ASC
+            LIMIT 100
         ");
         $stmt->execute([
             ':last_id' => $lastMsgId,
