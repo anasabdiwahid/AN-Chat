@@ -197,9 +197,14 @@ async function loadUsers(search = '') {
                     </td>
                     <td>
                         ${isSelf ? '<span style="font-size:11px;color:var(--text-muted);">Current Admin</span>' : `
-                            <button class="btn btn-outline btn-sm" onclick="toggleAdminRole(${u.id}, ${isAdmin ? 0 : 1})">
-                                ${isAdmin ? '<i class="fas fa-user-minus"></i> Remove Admin' : '<i class="fas fa-user-shield"></i> Make Admin'}
-                            </button>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                                <button class="btn btn-outline btn-sm" onclick="toggleAdminRole(${u.id}, ${isAdmin ? 0 : 1})">
+                                    ${isAdmin ? '<i class="fas fa-user-minus"></i> Remove Admin' : '<i class="fas fa-user-shield"></i> Make Admin'}
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteAdminUser(${u.id}, ${isAdmin ? 'true' : 'false'})">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </div>
                         `}
                     </td>
                 </tr>
@@ -208,6 +213,30 @@ async function loadUsers(search = '') {
         tbody.innerHTML = html;
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--danger);">Error loading users list.</td></tr>`;
+    }
+}
+
+async function deleteAdminUser(userId, isAdmin) {
+    const extra = isAdmin ? '\nAkoonkani waa admin; tirtiristiisu waxay ka saari doontaa xogtiisa app-ka.' : '\nTirtiristu waa joogto, waxayna ka saari doontaa fariimaha, calls-ka iyo xiriirrada user-kan.';
+    if (!confirm(`Ma hubtaa inaad si joogto ah u tirtirayso user #${userId}?${extra}`)) return;
+
+    try {
+        const res = await fetch('api/admin/delete-user.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': window.ADMIN_CSRF_TOKEN || ''
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+        const data = await res.json();
+        showAdminToast(data.message || (data.success ? 'User deleted.' : 'User could not be deleted.'), data.success ? 'success' : 'error');
+        if (data.success) {
+            loadUsers(document.getElementById('adminSearchUsers')?.value || '');
+            loadStats();
+        }
+    } catch (e) {
+        showAdminToast('Network error deleting user.', 'error');
     }
 }
 
@@ -379,4 +408,3 @@ function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-

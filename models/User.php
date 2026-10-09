@@ -268,6 +268,55 @@ class User {
         return $stmt->execute([':adm' => $isAdmin ? 1 : 0, ':id' => $userId]);
     }
 
+    public function deleteUserForAdmin(int $targetUserId, int $adminId): array {
+        if ($targetUserId <= 0 || $targetUserId === $adminId) {
+            return ['success' => false, 'message' => 'Ma tirtiri kartid akoonkaaga ama user ID khaldan.'];
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            // Lock admin rows so two simultaneous deletes cannot remove every admin.
+            $admins = $this->db->query("SELECT id FROM users WHERE is_admin = 1 FOR UPDATE")->fetchAll(PDO::FETCH_COLUMN);
+            $stmtUser = $this->db->prepare("SELECT id, is_admin FROM users WHERE id = :id FOR UPDATE");
+            $stmtUser->execute([':id' => $targetUserId]);
+            $target = $stmtUser->fetch(PDO::FETCH_ASSOC);
+            if (!$target) {
+                $this->db->rollBack();
+                return ['success' => false, 'message' => 'User-ka lama helin.'];
+            }
+            if ((int)$target['is_admin'] === 1 && count($admins) <= 1) {
+                $this->db->rollBack();
+                return ['success' => false, 'message' => 'Admin-ka ugu dambeeya lama tirtiri karo. Marka hore admin kale samee.'];
+            }
+
+            // call_signals has no foreign key in older installs, so remove its rows explicitly.
+            $signals = $this->db->prepare("DELETE FROM call_signals
+                WHERE from_user_id = :from_id OR to_user_id = :to_id
+                   OR call_id IN (SELECT id FROM calls WHERE caller_id = :caller_id OR receiver_id = :receiver_id)");
+            $signals->execute([
+                ':from_id' => $targetUserId,
+                ':to_id' => $targetUserId,
+                ':caller_id' => $targetUserId,
+                ':receiver_id' => $targetUserId
+            ]);
+
+            // Other user-owned rows are removed by the database's ON DELETE CASCADE constraints.
+            $delete = $this->db->prepare("DELETE FROM users WHERE id = :id");
+            $delete->execute([':id' => $targetUserId]);
+            if ($delete->rowCount() !== 1) {
+                throw new RuntimeException('User delete did not remove exactly one record.');
+            }
+
+            $this->db->commit();
+            return ['success' => true, 'message' => 'User-ka iyo xogtiisa xiriirka leh waa la tirtiray.'];
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('Admin user deletion failed: ' . $e->getMessage());
+            return ['success' => false, 'message' => 'User-ka lama tirtiri karin. Fadlan hubi database-ka.'];
+        }
+    }
+
     public function getAdminStats(): array {
         $totalUsers = (int)$this->db->query("SELECT COUNT(*) FROM users")->fetchColumn();
         $onlineUsers = (int)$this->db->query("SELECT COUNT(*) FROM users WHERE status = 'online'")->fetchColumn();
@@ -288,4 +337,3 @@ class User {
         ];
     }
 }
-

@@ -277,8 +277,8 @@ $adminAvatar = $currentAdmin['profile_image'] ?
             'phone' => $currentAdmin['phone'],
             'is_admin' => 1
         ], JSON_UNESCAPED_SLASHES) ?>;
+        window.ADMIN_CSRF_TOKEN = <?= json_encode(getCsrfToken(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     </script>
     <script src="assets/js/admin.js"></script>
 </body>
 </html>
-
