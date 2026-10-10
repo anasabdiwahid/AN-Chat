@@ -733,6 +733,9 @@ $userAvatar = $currentUser['profile_image'] ?
                 <button class="control-btn" id="btnToggleVoiceMute" title="Mute Microphone">
                     <i class="fas fa-microphone"></i>
                 </button>
+                <button class="control-btn active" id="btnToggleVoiceSpeaker" title="Speaker Out">
+                    <i class="fas fa-volume-high"></i>
+                </button>
                 <button class="call-btn-circle end" id="btnEndVoiceCall" title="End Call">
                     <i class="fas fa-phone-slash"></i>
                 </button>
@@ -749,6 +752,9 @@ $userAvatar = $currentUser['profile_image'] ?
                 <span id="videoCallTimer" style="font-size:14px;font-weight:600;color:var(--primary);margin-right:8px;">00:00</span>
                 <button class="control-btn" id="btnToggleVideoAudio" title="Toggle Mic">
                     <i class="fas fa-microphone"></i>
+                </button>
+                <button class="control-btn active" id="btnToggleVideoSpeaker" title="Speaker Out">
+                    <i class="fas fa-volume-high"></i>
                 </button>
                 <button class="control-btn" id="btnToggleVideoCam" title="Toggle Camera">
                     <i class="fas fa-video"></i>

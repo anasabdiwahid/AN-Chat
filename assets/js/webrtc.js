@@ -11,6 +11,7 @@ class WebRTCManager {
         this.callType = 'voice'; // 'voice' or 'video'
         this.isAudioMuted = false;
         this.isVideoMuted = false;
+        this.isSpeakerOn = true;
         this.callConnected = false;
         this.callAccepted = false;
         this.callUiActivated = false;
@@ -774,6 +775,32 @@ class WebRTCManager {
         return false;
     }
 
+    async toggleSpeakerOut() {
+        this.isSpeakerOn = !this.isSpeakerOn;
+        const remoteAudio = document.getElementById('remoteAudio');
+        if (remoteAudio) {
+            remoteAudio.volume = this.isSpeakerOn ? 1.0 : 0.25;
+            if (typeof remoteAudio.setSinkId === 'function' && navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function') {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const outputs = devices.filter(d => d.kind === 'audiooutput');
+                    if (outputs.length > 1) {
+                        if (this.isSpeakerOn) {
+                            const speaker = outputs.find(d => /speaker|loudspeaker|external/i.test(d.label)) || outputs[0];
+                            if (speaker) await remoteAudio.setSinkId(speaker.deviceId);
+                        } else {
+                            const earpiece = outputs.find(d => /earpiece|receiver|phone|head/i.test(d.label)) || outputs[outputs.length - 1];
+                            if (earpiece) await remoteAudio.setSinkId(earpiece.deviceId);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[WebRTC] setSinkId error:', e);
+                }
+            }
+        }
+        return this.isSpeakerOn;
+    }
+
     declineCall(callerId, callId) {
         this.sendWs({
             type: 'call_status',
@@ -860,12 +887,13 @@ class WebRTCManager {
         this.pendingLocalIceCandidates = [];
         this.isAudioMuted = false;
         this.isVideoMuted = false;
+        this.isSpeakerOn = true;
         this.pendingIceCandidates = [];
 
         // Clear audio & video players
         const remoteAudio = document.getElementById('remoteAudio');
         if (remoteAudio) {
-            try { remoteAudio.pause(); remoteAudio.srcObject = null; } catch (e) {}
+            try { remoteAudio.pause(); remoteAudio.srcObject = null; remoteAudio.volume = 1.0; } catch (e) {}
         }
         const remoteVideo = document.getElementById('remoteVideo');
         if (remoteVideo) {

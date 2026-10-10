@@ -111,6 +111,28 @@ class CallController {
                 }
             });
         }
+
+        // Toggle Speaker Output (Speaker Out / Earpiece)
+        const speakerBtns = [document.getElementById('btnToggleVoiceSpeaker'), document.getElementById('btnToggleVideoSpeaker')];
+        speakerBtns.forEach(b => {
+            if (b) {
+                b.addEventListener('click', async () => {
+                    if (window.webrtc && typeof window.webrtc.toggleSpeakerOut === 'function') {
+                        const isSpeaker = await window.webrtc.toggleSpeakerOut();
+                        speakerBtns.forEach(btn => {
+                            if (!btn) return;
+                            btn.classList.toggle('active', isSpeaker);
+                            btn.classList.toggle('off', !isSpeaker);
+                            btn.innerHTML = isSpeaker ? '<i class="fas fa-volume-high"></i>' : '<i class="fas fa-volume-xmark"></i>';
+                            btn.title = isSpeaker ? 'Speaker Out: ON' : 'Speaker Out: OFF';
+                        });
+                        if (typeof showToast === 'function') {
+                            showToast(isSpeaker ? 'Speaker Out: ON (Codka Sare)' : 'Speaker Out: OFF (Codka Hoose / Dhagta)', 'info');
+                        }
+                    }
+                });
+            }
+        });
     }
 
     // 1. Initial State: Outgoing Call Dialing (Calling...)
@@ -308,6 +330,25 @@ class CallController {
         this.acceptPendingCallId = null;
         if (this.activeCallOverlay) {
             this.activeCallOverlay.classList.remove('active');
+        }
+        const speakerBtns = [document.getElementById('btnToggleVoiceSpeaker'), document.getElementById('btnToggleVideoSpeaker')];
+        speakerBtns.forEach(btn => {
+            if (!btn) return;
+            btn.classList.add('active');
+            btn.classList.remove('off');
+            btn.innerHTML = '<i class="fas fa-volume-high"></i>';
+            btn.title = 'Speaker Out';
+        });
+        const muteBtns = [document.getElementById('btnToggleVoiceMute'), document.getElementById('btnToggleVideoAudio')];
+        muteBtns.forEach(btn => {
+            if (!btn) return;
+            btn.classList.remove('muted');
+            btn.innerHTML = '<i class="fas fa-microphone"></i>';
+        });
+        const camBtn = document.getElementById('btnToggleVideoCam');
+        if (camBtn) {
+            camBtn.classList.remove('muted');
+            camBtn.innerHTML = '<i class="fas fa-video"></i>';
         }
     }
 

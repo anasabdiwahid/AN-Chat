@@ -167,6 +167,18 @@
 
 .control-btn.muted {
     background: var(--danger);
+    color: #FFFFFF;
+}
+
+.control-btn.active {
+    background: var(--primary);
+    color: #FFFFFF;
+    box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.4);
+}
+
+.control-btn.off {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
 }
 
 /* 3. Active Video Call Screen */
