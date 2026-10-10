@@ -694,6 +694,9 @@ $userAvatar = $currentUser['profile_image'] ?
     <div class="call-modal-overlay" id="callModalOverlay">
         <!-- Remote Audio Stream Player for Voice Calls -->
         <audio id="remoteAudio" autoplay playsinline style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
+        <!-- Dedicated Incoming Ringtone & Outgoing Ringback Players -->
+        <audio id="incomingRingtoneAudio" loop preload="auto" playsinline src="assets/sounds/ringtone.wav" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
+        <audio id="outgoingRingbackAudio" loop preload="auto" playsinline src="assets/sounds/ringback.wav" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
 
         <!-- A. Incoming Call Screen -->
         <div class="incoming-call-box" id="incomingCallBox" style="display:none;">

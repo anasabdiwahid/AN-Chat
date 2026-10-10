@@ -24,9 +24,13 @@ class CallController {
         this.titleFlashInterval = null;
         this.originalTitle = null;
 
+        this.wakeLock = null;
+        this.notificationInterval = null;
+
         this.initControls();
         this.initServiceWorkerBridge();
         this.requestNotificationPermission();
+        this.initAudioUnlock();
     }
 
     initControls() {
@@ -226,9 +230,17 @@ class CallController {
             avatarEl.src = resolved;
         }
 
+        // 1. Play loud ringing audio
         this.startRingtone();
+        // 2. Keep screen awake and lit up while on the table
+        this.acquireWakeLock();
+        // 3. Show lockscreen caller widget via MediaSession
+        this.setupMediaSession(payload);
+        // 4. Repeated system notification with actions & vibration
         this.showSystemCallNotification(payload);
+        // 5. Hardware vibration loop
         this.startVibration();
+        // 6. Tab title flashing
         this.startTitleFlash(payload.caller_name || 'A/N User');
     }
 
@@ -257,6 +269,8 @@ class CallController {
         this.acceptPendingCallId = null;
         this.stopRingtone();
         this.stopRingbackTone();
+        this.releaseWakeLock();
+        this.clearMediaSession();
         this.closeSystemCallNotification();
         this.stopVibration();
         this.stopTitleFlash();
@@ -337,6 +351,8 @@ class CallController {
     hideCallOverlay() {
         this.stopRingtone();
         this.stopRingbackTone();
+        this.releaseWakeLock();
+        this.clearMediaSession();
         this.closeSystemCallNotification();
         this.stopVibration();
         this.stopTitleFlash();
@@ -392,16 +408,155 @@ class CallController {
         clearInterval(this.timerInterval);
     }
 
-    // Pleasant Outgoing Ringback Tone (Caller hears dialing sound: tuut... tuut...)
+    initAudioUnlock() {
+        const unlock = () => {
+            const rTone = document.getElementById('incomingRingtoneAudio');
+            const rBack = document.getElementById('outgoingRingbackAudio');
+            const rAudio = document.getElementById('remoteAudio');
+
+            [rTone, rBack, rAudio].forEach(el => {
+                if (el) {
+                    try {
+                        const playPromise = el.play();
+                        if (playPromise !== undefined) {
+                            playPromise.then(() => {
+                                el.pause();
+                                el.currentTime = 0;
+                            }).catch(() => {});
+                        }
+                    } catch (e) {}
+                }
+            });
+
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                    const ctx = new AudioCtx();
+                    ctx.resume().then(() => ctx.close()).catch(() => {});
+                }
+            } catch (e) {}
+
+            window.removeEventListener('click', unlock, true);
+            window.removeEventListener('touchstart', unlock, true);
+            window.removeEventListener('keydown', unlock, true);
+        };
+
+        window.addEventListener('click', unlock, { capture: true, once: true });
+        window.addEventListener('touchstart', unlock, { capture: true, once: true });
+        window.addEventListener('keydown', unlock, { capture: true, once: true });
+    }
+
+    async acquireWakeLock() {
+        if ('wakeLock' in navigator && navigator.wakeLock.request) {
+            try {
+                this.wakeLock = await navigator.wakeLock.request('screen');
+                this.wakeLock.addEventListener('release', () => {
+                    this.wakeLock = null;
+                });
+            } catch (e) {
+                console.warn('[Call] WakeLock request warning:', e);
+            }
+        }
+    }
+
+    releaseWakeLock() {
+        if (this.wakeLock) {
+            try {
+                this.wakeLock.release();
+            } catch (e) {}
+            this.wakeLock = null;
+        }
+    }
+
+    setupMediaSession(payload) {
+        if ('mediaSession' in navigator && window.MediaMetadata) {
+            try {
+                const callerName = payload.caller_name || 'A/N User';
+                const avatarUrl = payload.caller_image && typeof window.resolveAvatarUrl === 'function'
+                    ? window.resolveAvatarUrl(payload.caller_image)
+                    : 'assets/icons/icon-192.png';
+
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: `📞 Wicitaan: ${callerName}`,
+                    artist: 'A/N Chat - Wicitaan Soo Dhacaya...',
+                    album: payload.call_type === 'video' ? 'Video Call 🎥' : 'Voice Call 📞',
+                    artwork: [
+                        { src: avatarUrl, sizes: '192x192', type: 'image/png' },
+                        { src: avatarUrl, sizes: '512x512', type: 'image/png' }
+                    ]
+                });
+                navigator.mediaSession.playbackState = 'playing';
+
+                navigator.mediaSession.setActionHandler('play', () => this.acceptIncomingCall());
+                navigator.mediaSession.setActionHandler('pause', () => this.acceptIncomingCall());
+                navigator.mediaSession.setActionHandler('nexttrack', () => this.acceptIncomingCall());
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    if (window.webrtc) window.webrtc.declineCall(payload.from_user_id || payload.caller_id, payload.call_id);
+                    this.hideCallOverlay();
+                });
+            } catch (e) {
+                console.warn('[Call] MediaSession setup error:', e);
+            }
+        }
+    }
+
+    clearMediaSession() {
+        if ('mediaSession' in navigator) {
+            try {
+                navigator.mediaSession.playbackState = 'none';
+                navigator.mediaSession.setActionHandler('play', null);
+                navigator.mediaSession.setActionHandler('pause', null);
+                navigator.mediaSession.setActionHandler('nexttrack', null);
+                navigator.mediaSession.setActionHandler('previoustrack', null);
+            } catch (e) {}
+        }
+    }
+
     startRingbackTone() {
         if (this.isRingbackPlaying) return;
+        this.isRingbackPlaying = true;
+        try {
+            const ringbackAudio = document.getElementById('outgoingRingbackAudio');
+            if (ringbackAudio) {
+                ringbackAudio.volume = 0.85;
+                ringbackAudio.currentTime = 0;
+                const p = ringbackAudio.play();
+                if (p !== undefined) {
+                    p.catch(() => this.playWebAudioRingback());
+                }
+            } else {
+                this.playWebAudioRingback();
+            }
+        } catch (e) {
+            this.playWebAudioRingback();
+        }
+    }
+
+    stopRingbackTone() {
+        this.isRingbackPlaying = false;
+        clearTimeout(this.ringbackTimeout);
+        try {
+            const ringbackAudio = document.getElementById('outgoingRingbackAudio');
+            if (ringbackAudio) {
+                ringbackAudio.pause();
+                ringbackAudio.currentTime = 0;
+            }
+        } catch (e) {}
+
+        if (this.ringbackCtx) {
+            this.ringbackCtx.close().catch(() => {});
+            this.ringbackCtx = null;
+        }
+    }
+
+    playWebAudioRingback() {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
             this.ringbackCtx = new AudioContext();
             if (this.ringbackCtx.state === 'suspended') {
                 this.ringbackCtx.resume().catch(() => {});
             }
-            this.isRingbackPlaying = true;
 
             const playTone = () => {
                 if (!this.isRingbackPlaying || !this.ringbackCtx) return;
@@ -418,7 +573,7 @@ class CallController {
                 osc2.type = 'sine';
                 osc2.frequency.setValueAtTime(480, now);
 
-                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.setValueAtTime(0.12, now);
                 gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
 
                 osc1.connect(gain);
@@ -435,29 +590,61 @@ class CallController {
 
             playTone();
         } catch (e) {
-            console.warn('Ringback tone error', e);
+            console.warn('[Call] WebAudio ringback error:', e);
         }
     }
 
-    stopRingbackTone() {
-        this.isRingbackPlaying = false;
-        clearTimeout(this.ringbackTimeout);
-        if (this.ringbackCtx) {
-            this.ringbackCtx.close().catch(() => {});
-            this.ringbackCtx = null;
-        }
-    }
-
-    // Pleasant Web Audio ringtone for Incoming Calls
+    // Loud, clear ringtone for Incoming Calls
     startRingtone() {
         if (this.isRinging) return;
+        this.isRinging = true;
+
+        // 1. Primary: Loud HTML5 Audio Ringtone
+        try {
+            const ringAudio = document.getElementById('incomingRingtoneAudio');
+            if (ringAudio) {
+                ringAudio.volume = 1.0;
+                ringAudio.currentTime = 0;
+                const p = ringAudio.play();
+                if (p !== undefined) {
+                    p.catch(e => {
+                        console.warn('[Call] Ringtone audio play prevented by browser policy, using fallback:', e);
+                        this.playWebAudioRingtone();
+                    });
+                }
+            } else {
+                this.playWebAudioRingtone();
+            }
+        } catch (e) {
+            this.playWebAudioRingtone();
+        }
+    }
+
+    stopRingtone() {
+        this.isRinging = false;
+        clearTimeout(this.ringtoneTimeout);
+        try {
+            const ringAudio = document.getElementById('incomingRingtoneAudio');
+            if (ringAudio) {
+                ringAudio.pause();
+                ringAudio.currentTime = 0;
+            }
+        } catch (e) {}
+
+        if (this.audioContext) {
+            this.audioContext.close().catch(() => {});
+            this.audioContext = null;
+        }
+    }
+
+    playWebAudioRingtone() {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
             this.audioContext = new AudioContext();
             if (this.audioContext.state === 'suspended') {
                 this.audioContext.resume().catch(() => {});
             }
-            this.isRinging = true;
 
             const playBurst = () => {
                 if (!this.isRinging || !this.audioContext) return;
@@ -465,37 +652,38 @@ class CallController {
                     this.audioContext.resume().catch(() => {});
                 }
                 const now = this.audioContext.currentTime;
-                const osc = this.audioContext.createOscillator();
+                const osc1 = this.audioContext.createOscillator();
+                const osc2 = this.audioContext.createOscillator();
                 const gain = this.audioContext.createGain();
 
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(440, now);
-                osc.frequency.setValueAtTime(480, now + 0.1);
+                osc1.type = 'triangle';
+                osc2.type = 'sine';
+                osc1.frequency.setValueAtTime(523, now);
+                osc1.frequency.setValueAtTime(659, now + 0.15);
+                osc1.frequency.setValueAtTime(784, now + 0.3);
+                osc1.frequency.setValueAtTime(1046, now + 0.45);
 
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                osc2.frequency.setValueAtTime(1046, now);
+                osc2.frequency.setValueAtTime(784, now + 0.45);
 
-                osc.connect(gain);
+                gain.gain.setValueAtTime(0.7, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
                 gain.connect(this.audioContext.destination);
 
-                osc.start(now);
-                osc.stop(now + 0.8);
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.9);
+                osc2.stop(now + 0.9);
 
-                this.ringtoneTimeout = setTimeout(playBurst, 2000);
+                this.ringtoneTimeout = setTimeout(playBurst, 1500);
             };
 
             playBurst();
         } catch (e) {
-            console.warn('Ringtone error', e);
-        }
-    }
-
-    stopRingtone() {
-        this.isRinging = false;
-        clearTimeout(this.ringtoneTimeout);
-        if (this.audioContext) {
-            this.audioContext.close().catch(() => {});
-            this.audioContext = null;
+            console.warn('[Call] WebAudio ringtone error:', e);
         }
     }
 
@@ -562,6 +750,20 @@ class CallController {
             return;
         }
 
+        this.dispatchNotification(payload);
+
+        // Keep Android lockscreen and heads-up banner buzzing while phone is sitting on the table
+        clearInterval(this.notificationInterval);
+        this.notificationInterval = setInterval(() => {
+            if (this.isRinging && ('Notification' in window) && Notification.permission === 'granted') {
+                this.dispatchNotification(payload);
+            } else {
+                clearInterval(this.notificationInterval);
+            }
+        }, 3500);
+    }
+
+    dispatchNotification(payload) {
         const callerName = payload.caller_name || 'A/N User';
         const isVideo = payload.call_type === 'video';
         const typeText = isVideo ? 'Wicitaan Muuqaal ah (Video Call 🎥)' : 'Wicitaan Cod ah (Voice Call 📞)';
@@ -571,13 +773,13 @@ class CallController {
             : 'assets/icons/icon-192.png';
 
         const options = {
-            body: `${typeText}\nTaabo si aad u qabato wicitaanka!`,
+            body: `${typeText}\n📞 Taabo si aad u qabato wicitaanka!`,
             icon: avatarUrl,
             badge: 'assets/icons/icon-192.png',
-            tag: 'incoming-call-' + (payload.call_id || Date.now()),
+            tag: 'incoming-call',
             renotify: true,
             requireInteraction: true,
-            vibrate: [600, 300, 600, 300, 600, 300, 600],
+            vibrate: [1000, 600, 1000, 600, 1000, 600, 1000, 600],
             silent: false,
             data: {
                 call_id: payload.call_id,
@@ -642,6 +844,10 @@ class CallController {
     }
 
     closeSystemCallNotification() {
+        if (this.notificationInterval) {
+            clearInterval(this.notificationInterval);
+            this.notificationInterval = null;
+        }
         if (this.incomingNotification) {
             try { this.incomingNotification.close(); } catch (e) {}
             this.incomingNotification = null;
@@ -664,15 +870,17 @@ class CallController {
     startVibration() {
         if ('vibrate' in navigator) {
             try {
-                navigator.vibrate([600, 300, 600, 300, 600, 300, 600]);
+                // Intense phone call vibration pattern: 1000ms vibrate, 600ms silence
+                const pattern = [1000, 600, 1000, 600, 1000, 600, 1000, 600];
+                navigator.vibrate(pattern);
                 clearInterval(this.vibrateInterval);
                 this.vibrateInterval = setInterval(() => {
                     if (this.isRinging && 'vibrate' in navigator) {
-                        navigator.vibrate([600, 300, 600, 300, 600, 300, 600]);
+                        navigator.vibrate(pattern);
                     } else {
                         clearInterval(this.vibrateInterval);
                     }
-                }, 3000);
+                }, 3500);
             } catch (e) {}
         }
     }

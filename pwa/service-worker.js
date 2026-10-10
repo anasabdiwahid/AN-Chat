@@ -1,5 +1,5 @@
 // pwa/service-worker.js - A/N Chat Service Worker
-const CACHE_NAME = 'an-chat-cache-v6';
+const CACHE_NAME = 'an-chat-cache-v7';
 
 const STATIC_ASSETS = [
     '../assets/css/variables.css',
@@ -14,7 +14,9 @@ const STATIC_ASSETS = [
     '../assets/icons/favicon.png',
     '../assets/icons/icon-192.png',
     '../assets/icons/icon-512.png',
-    '../assets/images/logo.png'
+    '../assets/images/logo.png',
+    '../assets/sounds/ringtone.wav',
+    '../assets/sounds/ringback.wav'
 ];
 
 self.addEventListener('install', (e) => {
