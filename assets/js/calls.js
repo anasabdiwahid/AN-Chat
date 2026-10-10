@@ -365,7 +365,10 @@ class CallController {
         this.activeCallOverlay.classList.add('active');
 
         // Show voice box as dialing container for both voice and video
-        this.voiceBox.style.display = 'flex';
+        if (this.voiceBox) {
+            this.voiceBox.style.display = 'flex';
+            this.voiceBox.classList.add('active');
+        }
         document.getElementById('voiceCallPeerName').textContent = peerName;
         const imgEl = document.getElementById('voiceCallPeerAvatar');
         if (imgEl) {
@@ -427,7 +430,10 @@ class CallController {
         this.pendingIncomingPayload = payload;
         this.resetOverlay();
         this.activeCallOverlay.classList.add('active');
-        this.incomingBox.style.display = 'flex';
+        if (this.incomingBox) {
+            this.incomingBox.style.display = 'flex';
+            this.incomingBox.classList.add('active');
+        }
 
         const callerName = payload.caller_name || 'A/N User';
         const isVideo = payload.call_type === 'video';
@@ -535,11 +541,17 @@ class CallController {
         this.activeCallOverlay.classList.add('active');
 
         if (callType === 'video') {
-            this.videoBox.style.display = 'flex';
+            if (this.videoBox) {
+                this.videoBox.style.display = 'flex';
+                this.videoBox.classList.add('active');
+            }
             const vTimer = document.getElementById('videoCallTimer');
             if (vTimer) vTimer.textContent = '00:00';
         } else {
-            this.voiceBox.style.display = 'flex';
+            if (this.voiceBox) {
+                this.voiceBox.style.display = 'flex';
+                this.voiceBox.classList.add('active');
+            }
             if (this.pendingIncomingPayload) {
                 const nameEl = document.getElementById('voiceCallPeerName');
                 if (nameEl && this.pendingIncomingPayload.caller_name) {
@@ -567,9 +579,18 @@ class CallController {
     }
 
     resetOverlay() {
-        this.incomingBox.style.display = 'none';
-        this.voiceBox.style.display = 'none';
-        this.videoBox.style.display = 'none';
+        if (this.incomingBox) {
+            this.incomingBox.style.display = 'none';
+            this.incomingBox.classList.remove('active');
+        }
+        if (this.voiceBox) {
+            this.voiceBox.style.display = 'none';
+            this.voiceBox.classList.remove('active');
+        }
+        if (this.videoBox) {
+            this.videoBox.style.display = 'none';
+            this.videoBox.classList.remove('active');
+        }
     }
 
     hideCallOverlay() {

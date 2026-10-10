@@ -112,7 +112,7 @@ $userAvatar = $currentUser['profile_image'] ?
             max-width: 460px !important;
             height: 100% !important;
             max-height: 100vh !important;
-            display: flex !important;
+            display: none !important;
             flex-direction: column !important;
             justify-content: space-between !important;
             align-items: center !important;
@@ -122,6 +122,9 @@ $userAvatar = $currentUser['profile_image'] ?
             z-index: 2 !important;
             overflow: hidden !important;
             animation: modernCallFadeIn 0.35s ease !important;
+        }
+        .modern-call-screen.active {
+            display: flex !important;
         }
         @keyframes modernCallFadeIn {
             0% { opacity: 0; transform: scale(0.96); }

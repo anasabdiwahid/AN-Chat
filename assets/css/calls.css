@@ -250,6 +250,27 @@
     gap: 20px;
 }
 
+/* Modern Cinematic Call Screen (Controlled Single Screen View) */
+.modern-call-screen {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    height: 100%;
+    max-height: 100vh;
+    display: none !important;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: calc(env(safe-area-inset-top, 24px) + 20px) 24px calc(env(safe-area-inset-bottom, 24px) + 32px);
+    box-sizing: border-box;
+    text-align: center;
+    z-index: 2;
+    overflow: hidden;
+}
+.modern-call-screen.active {
+    display: flex !important;
+}
+
 /* 2. Active Voice Call Screen (iOS Style) */
 .active-voice-box {
     width: 100%;
