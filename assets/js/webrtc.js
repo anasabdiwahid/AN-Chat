@@ -26,18 +26,37 @@ class WebRTCManager {
         this.remoteAudioSource = null;
         this.turnServersPromise = null;
 
-        const configuredIceServers = Array.isArray(window.WEBRTC_ICE_SERVERS) ? window.WEBRTC_ICE_SERVERS : [];
-        const fallbackStunServers = [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun.cloudflare.com:3478' }
+        const defaultIceServers = [
+            {
+                urls: [
+                    'stun:stun.l.google.com:19302',
+                    'stun:stun1.l.google.com:19302',
+                    'stun:stun2.l.google.com:19302',
+                    'stun:stun.cloudflare.com:3478',
+                    'stun:openrelay.metered.ca:80'
+                ]
+            },
+            {
+                urls: [
+                    'turn:openrelay.metered.ca:80',
+                    'turn:openrelay.metered.ca:443',
+                    'turn:openrelay.metered.ca:443?transport=tcp',
+                    'turns:openrelay.metered.ca:443?transport=tcp'
+                ],
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
         ];
+        const configuredIceServers = Array.isArray(window.WEBRTC_ICE_SERVERS) && window.WEBRTC_ICE_SERVERS.length
+            ? window.WEBRTC_ICE_SERVERS
+            : defaultIceServers;
+
         this.iceConfig = {
-            iceServers: [...(configuredIceServers.length ? configuredIceServers : fallbackStunServers),
-                ...(Array.isArray(window.WEBRTC_TURN_SERVERS) ? window.WEBRTC_TURN_SERVERS : [])],
+            iceServers: configuredIceServers,
             iceCandidatePoolSize: 4
         };
+        this.iceCandidateQueue = [];
+        this.iceQueueTimeout = null;
     }
 
     async loadTurnServers() {
@@ -66,6 +85,32 @@ class WebRTCManager {
             });
         }
         return this.turnServersPromise;
+    }
+
+    waitForIceGathering(maxWaitMs = 800) {
+        if (!this.peerConnection || this.peerConnection.iceGatheringState === 'complete') {
+            return Promise.resolve();
+        }
+        return new Promise(resolve => {
+            let timer = null;
+            const onStateChange = () => {
+                if (this.peerConnection && this.peerConnection.iceGatheringState === 'complete') {
+                    cleanup();
+                    resolve();
+                }
+            };
+            const cleanup = () => {
+                if (timer) clearTimeout(timer);
+                if (this.peerConnection) {
+                    this.peerConnection.removeEventListener('icegatheringstatechange', onStateChange);
+                }
+            };
+            timer = setTimeout(() => {
+                cleanup();
+                resolve();
+            }, maxWaitMs);
+            this.peerConnection.addEventListener('icegatheringstatechange', onStateChange);
+        });
     }
 
     sendWs(data) {
@@ -164,6 +209,7 @@ class WebRTCManager {
             this.setupPeerConnection();
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
+            await this.waitForIceGathering(800);
             this.localOffer = this.peerConnection.localDescription;
 
             const res = await fetch('api/calls/create.php', {
@@ -420,6 +466,7 @@ class WebRTCManager {
                 event.track.onunmute = () => {
                     console.info('[WebRTC] Remote track is unmuted:', event.track.kind);
                     playRemoteAudio();
+                    this.markCallConnected();
                 };
             }
 
@@ -455,8 +502,7 @@ class WebRTCManager {
                     this.pendingLocalIceCandidates = this.pendingLocalIceCandidates || [];
                     this.pendingLocalIceCandidates.push(event.candidate);
                 } else {
-                    this.sendCallSignal('ice', { candidate: event.candidate })
-                        .catch(error => console.warn('[WebRTC] Could not store local ICE candidate:', error));
+                    this.queueLocalIceCandidate(event.candidate);
                 }
             }
         };
@@ -464,7 +510,16 @@ class WebRTCManager {
             console.warn('[WebRTC] ICE server error:', event.errorCode, event.errorText, event.url);
         };
         this.peerConnection.onconnectionstatechange = () => {
-            console.info('[WebRTC] Peer connection state:', this.peerConnection && this.peerConnection.connectionState);
+            const state = this.peerConnection && this.peerConnection.connectionState;
+            console.info('[WebRTC] Peer connection state:', state);
+            if (state === 'connected') {
+                clearTimeout(this.disconnectTimeout);
+                this.disconnectTimeout = null;
+                this.markCallConnected();
+            } else if (state === 'failed') {
+                this.endCall('ended');
+                if (window.callController) window.callController.hideCallOverlay();
+            }
         };
 
         this.peerConnection.oniceconnectionstatechange = () => {
@@ -483,7 +538,7 @@ class WebRTCManager {
                     }
                 }, 10000);
             } else if (state === 'failed') {
-                if (typeof showToast === 'function') showToast('Shabakadu ma helin waddo ay codka/muuqaalka ku gudbiso. TURN server ayaa loo baahan karaa.', 'error');
+                if (typeof showToast === 'function') showToast('Shabakadu ma helin waddo ay codka/muuqaalka ku gudbiso.', 'error');
                 this.endCall('ended');
                 if (window.callController) window.callController.hideCallOverlay();
             }
@@ -491,6 +546,21 @@ class WebRTCManager {
         this.peerConnection.onicegatheringstatechange = () => {
             console.log('[WebRTC] ICE gathering state:', this.peerConnection && this.peerConnection.iceGatheringState);
         };
+    }
+
+    queueLocalIceCandidate(candidate) {
+        if (!candidate) return;
+        this.iceCandidateQueue = this.iceCandidateQueue || [];
+        this.iceCandidateQueue.push(candidate);
+        if (this.iceQueueTimeout) return;
+        this.iceQueueTimeout = setTimeout(async () => {
+            this.iceQueueTimeout = null;
+            const batch = this.iceCandidateQueue ? [...this.iceCandidateQueue] : [];
+            this.iceCandidateQueue = [];
+            for (const cand of batch) {
+                await this.sendCallSignal('ice', { candidate: cand }).catch(() => {});
+            }
+        }, 250);
     }
 
     async drainPendingIceCandidates() {
@@ -554,6 +624,7 @@ class WebRTCManager {
         await this.drainPendingIceCandidates();
         const answer = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(answer);
+        await this.waitForIceGathering(800);
 
         const answerSignal = await this.sendCallSignal('answer', { sdp: this.peerConnection.localDescription });
         if (!answerSignal) throw new Error('Jawaabta wicitaanka lama gaarsiin karin. Hubi xiriirka server-ka kadib isku day mar kale.');
@@ -608,19 +679,16 @@ class WebRTCManager {
     }
 
     markCallConnected() {
+        if (this.callConnected) return;
         this.callConnected = true;
         clearTimeout(this.mediaWarningTimeout);
         this.mediaWarningTimeout = null;
         this.markCallAccepted();
-        if (this.callUiActivated) {
-            if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
+        if (window.callController) {
+            if (window.callController.statusTextEl && this.callType === 'voice') {
                 window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
             }
-            return;
-        }
-        this.callUiActivated = true;
-        if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
-            window.callController.statusTextEl.innerHTML = '<span style="color:var(--success);font-weight:600;"><i class="fas fa-check-circle"></i> Connected</span>';
+            window.callController.startCallTimer();
         }
     }
 
@@ -637,7 +705,6 @@ class WebRTCManager {
             if (window.callController.statusTextEl && this.callType === 'voice') {
                 window.callController.statusTextEl.textContent = 'Connecting media...';
             }
-            window.callController.startCallTimer();
         }
         clearTimeout(this.mediaWarningTimeout);
         this.mediaWarningTimeout = setTimeout(() => {
@@ -645,26 +712,43 @@ class WebRTCManager {
                 const state = this.peerConnection.iceConnectionState;
                 if (state !== 'connected' && state !== 'completed') {
                     if (window.callController && window.callController.statusTextEl && this.callType === 'voice') {
-                        window.callController.statusTextEl.textContent = 'Media wali ma xirmana — TURN/network ayaa loo baahan kara.';
+                        window.callController.statusTextEl.textContent = 'Media wali ma xirmana — shabakadda ayaa daciif ah.';
                     }
-                    if (typeof showToast === 'function') showToast('Call-ku waa la aqbalay, balse codku ma gudbayo. Hubi TURN server-ka iyo shabakadda.', 'error');
+                    if (typeof showToast === 'function') showToast('Call-ku waa la aqbalay, balse codku ma gudbayo. Fadlan dib u tijaabi.', 'error');
                 }
             }
-        }, 12000);
+        }, 15000);
     }
 
     async handleIncomingIce(payload) {
-        if (!payload.candidate) return;
+        if (!payload) return;
+        const candidateData = payload.candidate || payload;
+        if (!candidateData) return;
 
-        if (this.peerConnection && this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type) {
-            try {
-                await this.peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
-            } catch (e) {
-                console.error('[WebRTC] Error adding ICE candidate', e);
+        const addCandidate = async (cand) => {
+            if (!cand) return;
+            let candInit = cand;
+            if (typeof cand === 'string') {
+                candInit = { candidate: cand };
+            } else if (typeof cand === 'object' && cand.candidate === undefined && cand.sdpMid === undefined) {
+                return;
             }
+            if (this.peerConnection && this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type) {
+                try {
+                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(candInit));
+                } catch (e) {
+                    console.warn('[WebRTC] Error adding ICE candidate:', e);
+                }
+            } else {
+                this.pendingIceCandidates = this.pendingIceCandidates || [];
+                this.pendingIceCandidates.push(candInit);
+            }
+        };
+
+        if (Array.isArray(candidateData)) {
+            for (const c of candidateData) await addCandidate(c);
         } else {
-            this.pendingIceCandidates = this.pendingIceCandidates || [];
-            this.pendingIceCandidates.push(payload.candidate);
+            await addCandidate(candidateData);
         }
     }
 
@@ -745,6 +829,11 @@ class WebRTCManager {
             clearTimeout(this.ringingTimeout);
             this.ringingTimeout = null;
         }
+        if (this.iceQueueTimeout) {
+            clearTimeout(this.iceQueueTimeout);
+            this.iceQueueTimeout = null;
+        }
+        this.iceCandidateQueue = [];
         this.callConnected = false;
         this.callAccepted = false;
         this.callUiActivated = false;
