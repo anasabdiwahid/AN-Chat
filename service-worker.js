@@ -1,20 +1,20 @@
-// pwa/service-worker.js - A/N Chat Service Worker
+// service-worker.js - Root Service Worker for A/N Chat
 const CACHE_NAME = 'an-chat-cache-v6';
 
 const STATIC_ASSETS = [
-    '../assets/css/variables.css',
-    '../assets/css/reset.css',
-    '../assets/css/style.css',
-    '../assets/css/auth.css',
-    '../assets/css/dashboard.css',
-    '../assets/css/chat.css',
-    '../assets/css/calls.css',
-    '../assets/css/responsive.css',
-    '../assets/js/pwa.js',
-    '../assets/icons/favicon.png',
-    '../assets/icons/icon-192.png',
-    '../assets/icons/icon-512.png',
-    '../assets/images/logo.png'
+    'assets/css/variables.css',
+    'assets/css/reset.css',
+    'assets/css/style.css',
+    'assets/css/auth.css',
+    'assets/css/dashboard.css',
+    'assets/css/chat.css',
+    'assets/css/calls.css',
+    'assets/css/responsive.css',
+    'assets/js/pwa.js',
+    'assets/icons/favicon.png',
+    'assets/icons/icon-192.png',
+    'assets/icons/icon-512.png',
+    'assets/images/logo.png'
 ];
 
 self.addEventListener('install', (e) => {
@@ -71,7 +71,7 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     const action = event.action;
     const callId = event.notification.data ? event.notification.data.call_id : null;
-    const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '../dashboard.php';
+    const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : './dashboard.php';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -92,4 +92,3 @@ self.addEventListener('notificationclick', (event) => {
         })
     );
 });
-

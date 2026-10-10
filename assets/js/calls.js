@@ -19,8 +19,14 @@ class CallController {
         this.pendingIncomingPayload = null;
         this.acceptPendingCallId = null;
         this.isAcceptingCall = false;
+        this.incomingNotification = null;
+        this.vibrateInterval = null;
+        this.titleFlashInterval = null;
+        this.originalTitle = null;
 
         this.initControls();
+        this.initServiceWorkerBridge();
+        this.requestNotificationPermission();
     }
 
     initControls() {
@@ -221,6 +227,9 @@ class CallController {
         }
 
         this.startRingtone();
+        this.showSystemCallNotification(payload);
+        this.startVibration();
+        this.startTitleFlash(payload.caller_name || 'A/N User');
     }
 
     async acceptIncomingCall() {
@@ -248,6 +257,9 @@ class CallController {
         this.acceptPendingCallId = null;
         this.stopRingtone();
         this.stopRingbackTone();
+        this.closeSystemCallNotification();
+        this.stopVibration();
+        this.stopTitleFlash();
 
         // Show immediate progress, but only mark Connected when SDP/media setup succeeds.
         this.showActiveCallScreen(payload.call_type || 'voice');
@@ -325,6 +337,9 @@ class CallController {
     hideCallOverlay() {
         this.stopRingtone();
         this.stopRingbackTone();
+        this.closeSystemCallNotification();
+        this.stopVibration();
+        this.stopTitleFlash();
         this.stopCallTimer();
         this.resetOverlay();
         this.acceptPendingCallId = null;
@@ -504,6 +519,197 @@ class CallController {
             osc.start(now);
             osc.stop(now + 0.35);
         } catch (e) {}
+    }
+
+    requestNotificationPermission() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') return;
+
+        const ask = () => {
+            try {
+                Notification.requestPermission().then(perm => {
+                    console.info('[Call] System Notification permission status:', perm);
+                }).catch(() => {});
+            } catch (e) {}
+        };
+
+        if (Notification.permission === 'default') {
+            ask();
+            window.addEventListener('click', ask, { once: true });
+            window.addEventListener('touchstart', ask, { once: true });
+        }
+    }
+
+    initServiceWorkerBridge() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'accept_incoming_call') {
+                    this.acceptIncomingCall();
+                } else if (event.data && event.data.type === 'decline_incoming_call') {
+                    if (this.pendingIncomingPayload) {
+                        const p = this.pendingIncomingPayload;
+                        if (window.webrtc) window.webrtc.declineCall(p.from_user_id || p.caller_id, p.call_id);
+                        this.hideCallOverlay();
+                    }
+                }
+            });
+        }
+    }
+
+    showSystemCallNotification(payload) {
+        if (!('Notification' in window) || Notification.permission !== 'granted') {
+            this.requestNotificationPermission();
+            return;
+        }
+
+        const callerName = payload.caller_name || 'A/N User';
+        const isVideo = payload.call_type === 'video';
+        const typeText = isVideo ? 'Wicitaan Muuqaal ah (Video Call 🎥)' : 'Wicitaan Cod ah (Voice Call 📞)';
+        const title = `📞 Wicitaan: ${callerName}`;
+        const avatarUrl = payload.caller_image && typeof window.resolveAvatarUrl === 'function'
+            ? window.resolveAvatarUrl(payload.caller_image)
+            : 'assets/icons/icon-192.png';
+
+        const options = {
+            body: `${typeText}\nTaabo si aad u qabato wicitaanka!`,
+            icon: avatarUrl,
+            badge: 'assets/icons/icon-192.png',
+            tag: 'incoming-call-' + (payload.call_id || Date.now()),
+            renotify: true,
+            requireInteraction: true,
+            vibrate: [600, 300, 600, 300, 600, 300, 600],
+            silent: false,
+            data: {
+                call_id: payload.call_id,
+                type: 'incoming_call',
+                url: window.location.href
+            },
+            actions: [
+                { action: 'accept', title: '📞 Qabo' },
+                { action: 'decline', title: '❌ Diid' }
+            ]
+        };
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(reg => {
+                if (reg && typeof reg.showNotification === 'function') {
+                    reg.showNotification(title, options).catch(() => {
+                        this.showFallbackNotification(title, options);
+                    });
+                } else if (navigator.serviceWorker.ready) {
+                    navigator.serviceWorker.ready.then(activeReg => {
+                        if (activeReg && typeof activeReg.showNotification === 'function') {
+                            activeReg.showNotification(title, options).catch(() => {
+                                this.showFallbackNotification(title, options);
+                            });
+                        } else {
+                            this.showFallbackNotification(title, options);
+                        }
+                    }).catch(() => this.showFallbackNotification(title, options));
+                } else {
+                    this.showFallbackNotification(title, options);
+                }
+            }).catch(() => {
+                this.showFallbackNotification(title, options);
+            });
+        } else {
+            this.showFallbackNotification(title, options);
+        }
+    }
+
+    showFallbackNotification(title, options) {
+        try {
+            // Strip options that trigger TypeError in native Notification constructor
+            const fallbackOptions = {
+                body: options.body,
+                icon: options.icon,
+                badge: options.badge,
+                tag: options.tag,
+                renotify: options.renotify,
+                requireInteraction: options.requireInteraction,
+                silent: options.silent
+            };
+            const notif = new Notification(title, fallbackOptions);
+            this.incomingNotification = notif;
+            notif.onclick = () => {
+                try { window.focus(); } catch (e) {}
+                this.acceptIncomingCall();
+                notif.close();
+            };
+        } catch (e) {
+            console.warn('[Call] Native Notification creation warning:', e);
+        }
+    }
+
+    closeSystemCallNotification() {
+        if (this.incomingNotification) {
+            try { this.incomingNotification.close(); } catch (e) {}
+            this.incomingNotification = null;
+        }
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                regs.forEach(reg => {
+                    reg.getNotifications().then(notifs => {
+                        notifs.forEach(n => {
+                            if (!n.tag || n.tag.startsWith('incoming-call')) {
+                                n.close();
+                            }
+                        });
+                    }).catch(() => {});
+                });
+            }).catch(() => {});
+        }
+    }
+
+    startVibration() {
+        if ('vibrate' in navigator) {
+            try {
+                navigator.vibrate([600, 300, 600, 300, 600, 300, 600]);
+                clearInterval(this.vibrateInterval);
+                this.vibrateInterval = setInterval(() => {
+                    if (this.isRinging && 'vibrate' in navigator) {
+                        navigator.vibrate([600, 300, 600, 300, 600, 300, 600]);
+                    } else {
+                        clearInterval(this.vibrateInterval);
+                    }
+                }, 3000);
+            } catch (e) {}
+        }
+    }
+
+    stopVibration() {
+        if (this.vibrateInterval) {
+            clearInterval(this.vibrateInterval);
+            this.vibrateInterval = null;
+        }
+        if ('vibrate' in navigator) {
+            try { navigator.vibrate(0); } catch (e) {}
+        }
+    }
+
+    startTitleFlash(callerName) {
+        this.stopTitleFlash();
+        this.originalTitle = document.title;
+        let toggle = false;
+        this.titleFlashInterval = setInterval(() => {
+            if (!this.isRinging) {
+                this.stopTitleFlash();
+                return;
+            }
+            document.title = toggle ? `📞 Wicitaan: ${callerName}!` : `🔔 Soo qabo wicitaanka...`;
+            toggle = !toggle;
+        }, 800);
+    }
+
+    stopTitleFlash() {
+        if (this.titleFlashInterval) {
+            clearInterval(this.titleFlashInterval);
+            this.titleFlashInterval = null;
+        }
+        if (this.originalTitle) {
+            document.title = this.originalTitle;
+            this.originalTitle = null;
+        }
     }
 }
 

@@ -70,11 +70,12 @@ function isIosDevice() {
 
 // Initialize on DOM load
 window.addEventListener('DOMContentLoaded', () => {
-    // 1. Register Service Worker
+    // 1. Register Service Worker with domain-wide scope
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('pwa/service-worker.js')
+        navigator.serviceWorker.register('service-worker.js')
+            .catch(() => navigator.serviceWorker.register('pwa/service-worker.js'))
             .then(reg => {
-                console.log('[PWA] Service Worker registered successfully', reg.scope);
+                if (reg) console.log('[PWA] Service Worker registered successfully', reg.scope);
             })
             .catch(err => {
                 console.warn('[PWA] Service Worker registration failed', err);
