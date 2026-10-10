@@ -758,25 +758,53 @@ $userAvatar = $currentUser['profile_image'] ?
             </div>
         </div>
 
-        <!-- B. Active Voice Call Screen -->
-        <div class="active-voice-box" id="activeVoiceBox" style="display:none;">
-            <div class="incoming-call-avatar" style="width:140px;height:140px;">
-                <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
+        <!-- B. Active Voice Call Screen (iOS Style) -->
+        <div class="active-voice-box ios-call-screen" id="activeVoiceBox" style="display:none;">
+            <!-- Top Header -->
+            <div class="ios-call-top">
+                <span class="ios-call-badge">A/N Chat Audio</span>
             </div>
-            <div style="font-size:24px;font-weight:700;" id="voiceCallPeerName">Anas Abdiwahid</div>
-            <div class="call-timer" id="callTimerDisplay" style="display:none;">00:00</div>
-            <div style="font-size:15px;color:rgba(255,255,255,0.85);font-weight:600;" id="voiceCallStatusText">Calling...</div>
 
-            <div class="active-call-controls">
-                <button class="control-btn" id="btnToggleVoiceMute" title="Mute Microphone">
-                    <i class="fas fa-microphone"></i>
-                </button>
-                <button class="control-btn active" id="btnToggleVoiceSpeaker" title="Speaker Out">
-                    <i class="fas fa-volume-high"></i>
-                </button>
-                <button class="call-btn-circle end" id="btnEndVoiceCall" title="End Call">
-                    <i class="fas fa-phone-slash"></i>
-                </button>
+            <!-- Center Caller Profile -->
+            <div class="ios-call-center">
+                <div class="ios-avatar-wrapper">
+                    <div class="ios-avatar-ring"></div>
+                    <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
+                </div>
+                <div class="ios-caller-info">
+                    <h1 class="ios-caller-name" id="voiceCallPeerName">Anas Abdiwahid</h1>
+                    <div class="ios-call-status-row">
+                        <span class="ios-call-timer-badge" id="callTimerDisplay" style="display:none;">00:00</span>
+                        <p class="ios-caller-subtext" id="voiceCallStatusText">Calling...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Active Call Controls (Mute, Speaker, End) -->
+            <div class="ios-active-controls">
+                <!-- Mute Mic -->
+                <div class="ios-ctrl-col">
+                    <button type="button" class="ios-ctrl-btn control-btn" id="btnToggleVoiceMute" title="Mute Microphone">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <span class="ios-ctrl-label">Mute</span>
+                </div>
+
+                <!-- Speaker Out -->
+                <div class="ios-ctrl-col">
+                    <button type="button" class="ios-ctrl-btn control-btn active" id="btnToggleVoiceSpeaker" title="Speaker Out">
+                        <i class="fas fa-volume-high"></i>
+                    </button>
+                    <span class="ios-ctrl-label">Speaker</span>
+                </div>
+
+                <!-- End Call -->
+                <div class="ios-ctrl-col">
+                    <button type="button" class="ios-ctrl-btn end call-btn-circle" id="btnEndVoiceCall" title="End Call">
+                        <i class="fas fa-phone-alt ios-icon-decline"></i>
+                    </button>
+                    <span class="ios-ctrl-label">End</span>
+                </div>
             </div>
         </div>
 
