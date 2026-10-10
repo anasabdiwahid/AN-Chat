@@ -76,6 +76,32 @@ class CallController {
             });
         }
 
+        // Remind Me / Mute Ringtone (iOS Style)
+        const btnMuteRing = document.getElementById('btnSilenceRingtone');
+        if (btnMuteRing) {
+            btnMuteRing.addEventListener('click', () => {
+                this.stopRingtone();
+                this.stopVibration();
+                if (typeof showToast === 'function') showToast('Codka wicitaanka waa la aamusiyay', 'info');
+            });
+        }
+
+        // Quick Message Button (iOS Style)
+        const btnQuickMsg = document.getElementById('btnQuickMessage');
+        if (btnQuickMsg) {
+            btnQuickMsg.addEventListener('click', () => {
+                const payload = this.pendingIncomingPayload;
+                if (payload) {
+                    const peerId = payload.from_user_id || payload.caller_id;
+                    if (window.webrtc) window.webrtc.declineCall(peerId, payload.call_id);
+                    this.hideCallOverlay();
+                    if (window.chatManager && typeof window.chatManager.openChat === 'function') {
+                        window.chatManager.openChat(peerId);
+                    }
+                }
+            });
+        }
+
         // End Active Call
         const endBtns = [document.getElementById('btnEndVoiceCall'), document.getElementById('btnEndVideoCall')];
         endBtns.forEach(b => {
@@ -218,8 +244,17 @@ class CallController {
         this.activeCallOverlay.classList.add('active');
         this.incomingBox.style.display = 'flex';
 
-        document.getElementById('incomingCallerName').textContent = payload.caller_name || 'A/N User';
-        document.getElementById('incomingCallType').textContent = payload.call_type === 'video' ? 'Incoming Video Call 🎥' : 'Incoming Voice Call 📞';
+        const callerName = payload.caller_name || 'A/N User';
+        const isVideo = payload.call_type === 'video';
+
+        const nameEl = document.getElementById('incomingCallerName');
+        if (nameEl) nameEl.textContent = callerName;
+
+        const typeEl = document.getElementById('incomingCallType');
+        if (typeEl) typeEl.textContent = isVideo ? 'Incoming Video Call 🎥' : 'Incoming Call';
+
+        const subtextEl = document.getElementById('incomingCallSubtext');
+        if (subtextEl) subtextEl.textContent = isVideo ? 'A/N Chat Video' : 'A/N Chat Audio';
 
         const avatarEl = document.getElementById('incomingCallerAvatar');
         if (avatarEl) {

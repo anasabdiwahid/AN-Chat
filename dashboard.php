@@ -695,30 +695,53 @@ $userAvatar = $currentUser['profile_image'] ?
         <!-- Remote Audio Stream Player for Voice Calls -->
         <audio id="remoteAudio" autoplay playsinline style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
         <!-- Dedicated Incoming Ringtone & Outgoing Ringback Players -->
-        <audio id="incomingRingtoneAudio" loop preload="auto" playsinline src="assets/sounds/ringtone.wav" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
+        <audio id="incomingRingtoneAudio" loop preload="auto" playsinline src="assets/sounds/ringtone.mp3" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
         <audio id="outgoingRingbackAudio" loop preload="auto" playsinline src="assets/sounds/ringback.wav" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></audio>
 
-        <!-- A. Incoming Call Screen -->
-        <div class="incoming-call-box" id="incomingCallBox" style="display:none;">
-            <div class="incoming-call-avatar">
-                <img id="incomingCallerAvatar" src="assets/images/default-avatar.png" alt="Caller" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
+        <!-- A. Incoming Call Screen (iOS Style) -->
+        <div class="incoming-call-box ios-call-screen" id="incomingCallBox" style="display:none;">
+            <!-- Top Header -->
+            <div class="ios-call-top">
+                <span class="ios-call-badge" id="incomingCallType">Incoming Call</span>
             </div>
-            <div>
-                <div class="incoming-call-name" id="incomingCallerName">Caller Name</div>
-                <div class="incoming-call-type" id="incomingCallType">Incoming Call...</div>
-            </div>
-            <div class="incoming-actions">
-                <div class="call-btn-action">
-                    <button class="call-btn-circle decline" id="btnDeclineCall" title="Decline">
-                        <i class="fas fa-phone-slash"></i>
-                    </button>
-                    <span style="font-size:12px;color:rgba(255,255,255,0.8);">Decline</span>
+
+            <!-- Center Caller Profile -->
+            <div class="ios-call-center">
+                <div class="ios-avatar-wrapper">
+                    <div class="ios-avatar-ring"></div>
+                    <img id="incomingCallerAvatar" src="assets/images/default-avatar.png" alt="Caller" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
                 </div>
-                <div class="call-btn-action">
-                    <button type="button" class="call-btn-circle accept" id="btnAcceptCall" title="Accept" aria-label="Accept call" onclick="if (typeof window.acceptIncomingCall === 'function') window.acceptIncomingCall();">
-                        <i class="fas fa-phone"></i>
+                <div class="ios-caller-info">
+                    <h1 class="ios-caller-name" id="incomingCallerName">Caller</h1>
+                    <p class="ios-caller-subtext" id="incomingCallSubtext">A/N Chat Audio</p>
+                </div>
+            </div>
+
+            <!-- iOS Middle Utility Row: Remind Me & Message -->
+            <div class="ios-call-utilities">
+                <button type="button" class="ios-util-btn" id="btnSilenceRingtone" title="Mute Ringtone">
+                    <div class="ios-util-icon"><i class="far fa-clock"></i></div>
+                    <span>Remind Me</span>
+                </button>
+                <button type="button" class="ios-util-btn" id="btnQuickMessage" title="Send Message">
+                    <div class="ios-util-icon"><i class="fas fa-comment"></i></div>
+                    <span>Message</span>
+                </button>
+            </div>
+
+            <!-- Bottom Action Row: Big Red Decline & Big Green Accept -->
+            <div class="ios-call-actions">
+                <div class="ios-action-col">
+                    <button type="button" class="ios-circle-btn decline" id="btnDeclineCall" title="Decline">
+                        <i class="fas fa-phone-alt ios-icon-decline"></i>
                     </button>
-                    <span style="font-size:12px;color:rgba(255,255,255,0.8);">Accept</span>
+                    <span class="ios-action-label">Decline</span>
+                </div>
+                <div class="ios-action-col">
+                    <button type="button" class="ios-circle-btn accept" id="btnAcceptCall" title="Accept" aria-label="Accept call" onclick="if (typeof window.acceptIncomingCall === 'function') window.acceptIncomingCall();">
+                        <i class="fas fa-phone ios-icon-accept"></i>
+                    </button>
+                    <span class="ios-action-label">Accept</span>
                 </div>
             </div>
         </div>
