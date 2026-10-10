@@ -774,6 +774,10 @@ class CallController {
                         if (window.webrtc) window.webrtc.declineCall(p.from_user_id || p.caller_id, p.call_id);
                         this.hideCallOverlay();
                     }
+                } else if (event.data && event.data.type === 'view_incoming_call') {
+                    if (this.pendingIncomingPayload) {
+                        this.showIncomingCall(this.pendingIncomingPayload);
+                    }
                 }
             });
         }
@@ -808,8 +812,9 @@ class CallController {
             : 'assets/icons/icon-192.png';
 
         const options = {
-            body: `${typeText}\n📞 Taabo si aad u qabato wicitaanka!`,
+            body: `${typeText}\n📞 Taabo si aad u aragto shaashadda wicitaanka!`,
             icon: avatarUrl,
+            image: avatarUrl,
             badge: 'assets/icons/icon-192.png',
             tag: 'incoming-call',
             renotify: true,

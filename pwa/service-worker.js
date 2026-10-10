@@ -80,11 +80,13 @@ self.addEventListener('notificationclick', (event) => {
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
             for (const client of clientList) {
                 if ('focus' in client) {
-                    if (action === 'decline') {
+                    if (action === 'accept') {
+                        client.postMessage({ type: 'accept_incoming_call', call_id: callId });
+                    } else if (action === 'decline') {
                         client.postMessage({ type: 'decline_incoming_call', call_id: callId });
                     } else {
-                        // Accept button or direct tap on notification banner
-                        client.postMessage({ type: 'accept_incoming_call', call_id: callId });
+                        // User tapped notification banner on lockscreen: show the iOS incoming call screen
+                        client.postMessage({ type: 'view_incoming_call', call_id: callId });
                     }
                     return client.focus();
                 }
