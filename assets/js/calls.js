@@ -374,6 +374,8 @@ class CallController {
                 : (peerImage || 'assets/images/default-avatar.png');
             imgEl.onerror = () => { imgEl.onerror = null; imgEl.src = 'assets/images/default-avatar.png'; };
             imgEl.src = resolved;
+            const bgEl = document.getElementById('voiceCallAmbientBg');
+            if (bgEl) bgEl.style.backgroundImage = `url("${resolved}")`;
         }
 
         // IMPORTANT: Start in "Calling..." state and HIDE timer until call is answered
@@ -446,6 +448,8 @@ class CallController {
                 : (payload.caller_image || 'assets/images/default-avatar.png');
             avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = 'assets/images/default-avatar.png'; };
             avatarEl.src = resolved;
+            const inBgEl = document.getElementById('incomingCallAmbientBg');
+            if (inBgEl) inBgEl.style.backgroundImage = `url("${resolved}")`;
         }
 
         // 1. Play loud ringing audio
@@ -548,6 +552,8 @@ class CallController {
                         : (this.pendingIncomingPayload.caller_image || 'assets/images/default-avatar.png');
                     avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = 'assets/images/default-avatar.png'; };
                     avatarEl.src = resolved;
+                    const bgEl = document.getElementById('voiceCallAmbientBg');
+                    if (bgEl) bgEl.style.backgroundImage = `url("${resolved}")`;
                 }
             }
             if (this.statusTextEl) {

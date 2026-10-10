@@ -85,6 +85,281 @@ $userAvatar = $currentUser['profile_image'] ?
     <link rel="stylesheet" href="assets/css/calls.css?v=<?= @filemtime(__DIR__ . '/assets/css/calls.css') ?: time() ?>">
     <link rel="stylesheet" href="assets/css/responsive.css?v=<?= @filemtime(__DIR__ . '/assets/css/responsive.css') ?: time() ?>">
 
+    <!-- Modern Cinematic Call Screen Styles (Guaranteed Instant Cache Bypass) -->
+    <style id="modernCallStyles">
+        .call-modal-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            background: #08080c !important;
+            z-index: 999999 !important;
+            display: none;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            color: #FFFFFF !important;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif !important;
+            overflow: hidden !important;
+        }
+        .call-modal-overlay.active {
+            display: flex !important;
+        }
+        .modern-call-screen {
+            position: relative !important;
+            width: 100% !important;
+            max-width: 460px !important;
+            height: 100% !important;
+            max-height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            padding: calc(env(safe-area-inset-top, 24px) + 20px) 24px calc(env(safe-area-inset-bottom, 24px) + 32px) !important;
+            box-sizing: border-box !important;
+            text-align: center !important;
+            z-index: 2 !important;
+            overflow: hidden !important;
+            animation: modernCallFadeIn 0.35s ease !important;
+        }
+        @keyframes modernCallFadeIn {
+            0% { opacity: 0; transform: scale(0.96); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .call-ambient-backdrop {
+            position: absolute !important;
+            top: -40px !important;
+            left: -40px !important;
+            right: -40px !important;
+            bottom: -40px !important;
+            background-size: cover !important;
+            background-position: center !important;
+            filter: blur(55px) brightness(0.32) saturate(1.5) !important;
+            -webkit-filter: blur(55px) brightness(0.32) saturate(1.5) !important;
+            transform: scale(1.15) !important;
+            z-index: 0 !important;
+            pointer-events: none !important;
+            transition: background-image 0.4s ease !important;
+        }
+        .call-ambient-overlay {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            background: radial-gradient(circle at 50% 30%, rgba(0,0,0,0.15) 0%, rgba(5,5,10,0.85) 100%), linear-gradient(180deg, rgba(10,10,15,0.4) 0%, rgba(5,5,10,0.92) 100%) !important;
+            z-index: 1 !important;
+            pointer-events: none !important;
+        }
+        .modern-call-top {
+            position: relative !important;
+            z-index: 3 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 6px !important;
+            margin-top: 6px !important;
+        }
+        .modern-call-badge {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            padding: 6px 16px !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 30px !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            color: rgba(255, 255, 255, 0.82) !important;
+        }
+        .modern-call-badge i {
+            font-size: 11px !important;
+            color: #30d158 !important;
+        }
+        .modern-call-center {
+            position: relative !important;
+            z-index: 3 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            width: 100% !important;
+        }
+        .modern-avatar-container {
+            position: relative !important;
+            width: 154px !important;
+            height: 154px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 auto !important;
+        }
+        .modern-avatar-container img {
+            width: 142px !important;
+            height: 142px !important;
+            border-radius: 50% !important;
+            object-fit: cover !important;
+            display: block !important;
+            position: relative !important;
+            z-index: 3 !important;
+            border: 4px solid rgba(255, 255, 255, 0.95) !important;
+            box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75), 0 0 35px rgba(233, 30, 99, 0.35) !important;
+            background: #1c1c1e !important;
+        }
+        .modern-pulse-ring {
+            position: absolute !important;
+            width: 142px !important;
+            height: 142px !important;
+            border-radius: 50% !important;
+            border: 2px solid rgba(255, 255, 255, 0.45) !important;
+            z-index: 2 !important;
+            pointer-events: none !important;
+            animation: modernSonarPulse 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite !important;
+        }
+        .modern-pulse-ring.ring-1 { animation-delay: 0s !important; }
+        .modern-pulse-ring.ring-2 { animation-delay: 0.75s !important; }
+        .modern-pulse-ring.ring-3 { animation-delay: 1.5s !important; }
+        @keyframes modernSonarPulse {
+            0% { transform: scale(1); opacity: 0.75; }
+            50% { transform: scale(1.28); opacity: 0.25; }
+            100% { transform: scale(1.52); opacity: 0; }
+        }
+        .modern-caller-details {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 8px !important;
+            margin-top: 18px !important;
+        }
+        .modern-caller-name {
+            font-size: 32px !important;
+            font-weight: 700 !important;
+            color: #FFFFFF !important;
+            margin: 0 !important;
+            letter-spacing: -0.6px !important;
+            line-height: 1.2 !important;
+            text-shadow: 0 4px 18px rgba(0, 0, 0, 0.8) !important;
+        }
+        .modern-status-wrap {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 8px !important;
+            margin-top: 2px !important;
+        }
+        .modern-status-badge {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            padding: 6px 18px !important;
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 20px !important;
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            color: rgba(255, 255, 255, 0.9) !important;
+        }
+        .modern-status-pulse {
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 50% !important;
+            background: #30d158 !important;
+            box-shadow: 0 0 10px #30d158 !important;
+            animation: modernDotPulse 1.4s ease-in-out infinite !important;
+        }
+        @keyframes modernDotPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(0.65); opacity: 0.45; }
+        }
+        .modern-call-timer {
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            color: #30d158 !important;
+            background: rgba(48, 209, 88, 0.18) !important;
+            border: 1px solid rgba(48, 209, 88, 0.35) !important;
+            padding: 4px 16px !important;
+            border-radius: 20px !important;
+            letter-spacing: 0.5px !important;
+        }
+        .modern-call-bottom {
+            position: relative !important;
+            z-index: 3 !important;
+            width: 100% !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin-top: auto !important;
+        }
+        .modern-glass-dock {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 28px !important;
+            background: rgba(28, 28, 35, 0.65) !important;
+            backdrop-filter: blur(30px) !important;
+            -webkit-backdrop-filter: blur(30px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 46px !important;
+            padding: 14px 28px !important;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.65) !important;
+        }
+        .modern-dock-item {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 8px !important;
+        }
+        .modern-dock-btn {
+            width: 62px !important;
+            height: 62px !important;
+            border-radius: 50% !important;
+            border: none !important;
+            background: rgba(255, 255, 255, 0.15) !important;
+            color: #FFFFFF !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 22px !important;
+            cursor: pointer !important;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35) !important;
+            transition: transform 0.15s ease, background 0.2s ease !important;
+            -webkit-tap-highlight-color: transparent !important;
+        }
+        .modern-dock-btn:active {
+            transform: scale(0.92) !important;
+        }
+        .modern-dock-btn.active {
+            background: #E91E63 !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 6px 20px rgba(233, 30, 99, 0.55) !important;
+        }
+        .modern-dock-btn.muted {
+            background: #FF3B30 !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 6px 20px rgba(255, 59, 48, 0.55) !important;
+        }
+        .modern-dock-btn.end {
+            width: 68px !important;
+            height: 68px !important;
+            background: linear-gradient(135deg, #FF453A 0%, #D70015 100%) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 8px 26px rgba(255, 69, 58, 0.65) !important;
+        }
+        .modern-icon-hangup {
+            transform: rotate(135deg) !important;
+            font-size: 24px !important;
+        }
+        .modern-dock-label {
+            font-size: 12px !important;
+            font-weight: 500 !important;
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+    </style>
+
     <!-- Inline Resilient Global Utilities & Navigation Stubs -->
     <script>
         function escapeHtml(text) {
@@ -710,27 +985,42 @@ $userAvatar = $currentUser['profile_image'] ?
     <!-- ============================================== -->
     <div class="call-modal-overlay" id="callModalOverlay">
 
-        <!-- A. Incoming Call Screen (iOS Style) -->
-        <div class="incoming-call-box ios-call-screen" id="incomingCallBox" style="display:none;">
+        <!-- A. Incoming Call Screen (Modern Cinematic Ambient Style) -->
+        <div class="incoming-call-box modern-call-screen" id="incomingCallBox" style="display:none;">
+            <!-- Ambient Blurred Backdrop -->
+            <div class="call-ambient-backdrop" id="incomingCallAmbientBg"></div>
+            <div class="call-ambient-overlay"></div>
+
             <!-- Top Header -->
-            <div class="ios-call-top">
-                <span class="ios-call-badge" id="incomingCallType">Incoming Call</span>
+            <div class="modern-call-top">
+                <div class="modern-call-badge">
+                    <i class="fas fa-bell"></i>
+                    <span id="incomingCallType">Incoming Call</span>
+                </div>
             </div>
 
             <!-- Center Caller Profile -->
-            <div class="ios-call-center">
-                <div class="ios-avatar-wrapper">
-                    <div class="ios-avatar-ring"></div>
+            <div class="modern-call-center">
+                <div class="modern-avatar-container">
+                    <div class="modern-pulse-ring ring-1"></div>
+                    <div class="modern-pulse-ring ring-2"></div>
+                    <div class="modern-pulse-ring ring-3"></div>
                     <img id="incomingCallerAvatar" src="assets/images/default-avatar.png" alt="Caller" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
                 </div>
-                <div class="ios-caller-info">
-                    <h1 class="ios-caller-name" id="incomingCallerName">Caller</h1>
-                    <p class="ios-caller-subtext" id="incomingCallSubtext">A/N Chat Audio</p>
+
+                <div class="modern-caller-details">
+                    <h1 class="modern-caller-name" id="incomingCallerName">Caller</h1>
+                    <div class="modern-status-wrap">
+                        <div class="modern-status-badge">
+                            <span class="modern-status-pulse"></span>
+                            <span id="incomingCallSubtext">A/N Chat Audio</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- iOS Middle Utility Row: Remind Me & Message -->
-            <div class="ios-call-utilities">
+            <!-- Middle Utility Row: Remind Me & Message -->
+            <div class="ios-call-utilities" style="position:relative;z-index:3;">
                 <button type="button" class="ios-util-btn" id="btnSilenceRingtone" title="Mute Ringtone">
                     <div class="ios-util-icon"><i class="far fa-clock"></i></div>
                     <span>Remind Me</span>
@@ -742,68 +1032,85 @@ $userAvatar = $currentUser['profile_image'] ?
             </div>
 
             <!-- Bottom Action Row: Big Red Decline & Big Green Accept -->
-            <div class="ios-call-actions">
-                <div class="ios-action-col">
-                    <button type="button" class="ios-circle-btn decline" id="btnDeclineCall" title="Decline">
-                        <i class="fas fa-phone-alt ios-icon-decline"></i>
-                    </button>
-                    <span class="ios-action-label">Decline</span>
-                </div>
-                <div class="ios-action-col">
-                    <button type="button" class="ios-circle-btn accept" id="btnAcceptCall" title="Accept" aria-label="Accept call" onclick="if (typeof window.acceptIncomingCall === 'function') window.acceptIncomingCall();">
-                        <i class="fas fa-phone ios-icon-accept"></i>
-                    </button>
-                    <span class="ios-action-label">Accept</span>
+            <div class="modern-call-bottom">
+                <div class="ios-call-actions" style="position:relative;z-index:3;">
+                    <div class="ios-action-col">
+                        <button type="button" class="ios-circle-btn decline" id="btnDeclineCall" title="Decline">
+                            <i class="fas fa-phone-alt ios-icon-decline"></i>
+                        </button>
+                        <span class="ios-action-label">Decline</span>
+                    </div>
+                    <div class="ios-action-col">
+                        <button type="button" class="ios-circle-btn accept" id="btnAcceptCall" title="Accept" aria-label="Accept call" onclick="if (typeof window.acceptIncomingCall === 'function') window.acceptIncomingCall();">
+                            <i class="fas fa-phone ios-icon-accept"></i>
+                        </button>
+                        <span class="ios-action-label">Accept</span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- B. Active Voice Call Screen (iOS Style) -->
-        <div class="active-voice-box ios-call-screen" id="activeVoiceBox" style="display:none;">
-            <!-- Top Header -->
-            <div class="ios-call-top">
-                <span class="ios-call-badge">A/N Chat Audio</span>
+        <!-- B. Active / Outgoing Voice Call Screen (Modern Cinematic Ambient Style) -->
+        <div class="active-voice-box modern-call-screen" id="activeVoiceBox" style="display:none;">
+            <!-- Ambient Blurred Avatar Backdrop -->
+            <div class="call-ambient-backdrop" id="voiceCallAmbientBg"></div>
+            <div class="call-ambient-overlay"></div>
+
+            <!-- Top Header & Security Badge -->
+            <div class="modern-call-top">
+                <div class="modern-call-badge">
+                    <i class="fas fa-lock"></i>
+                    <span>A/N Chat • End-to-End Encrypted</span>
+                </div>
             </div>
 
-            <!-- Center Caller Profile -->
-            <div class="ios-call-center">
-                <div class="ios-avatar-wrapper">
-                    <div class="ios-avatar-ring"></div>
+            <!-- Center Caller Profile & Animated Ripple Avatar -->
+            <div class="modern-call-center">
+                <div class="modern-avatar-container">
+                    <div class="modern-pulse-ring ring-1"></div>
+                    <div class="modern-pulse-ring ring-2"></div>
+                    <div class="modern-pulse-ring ring-3"></div>
                     <img id="voiceCallPeerAvatar" src="assets/images/default-avatar.png" alt="Peer" onerror="this.onerror=null;this.src='assets/images/default-avatar.png'">
                 </div>
-                <div class="ios-caller-info">
-                    <h1 class="ios-caller-name" id="voiceCallPeerName">Anas Abdiwahid</h1>
-                    <div class="ios-call-status-row">
-                        <span class="ios-call-timer-badge" id="callTimerDisplay" style="display:none;">00:00</span>
-                        <p class="ios-caller-subtext" id="voiceCallStatusText">Calling...</p>
+
+                <div class="modern-caller-details">
+                    <h1 class="modern-caller-name" id="voiceCallPeerName">Anas Abdiwahid</h1>
+                    <div class="modern-status-wrap">
+                        <span class="modern-call-timer" id="callTimerDisplay" style="display:none;">00:00</span>
+                        <div class="modern-status-badge" id="voiceCallStatusBadge">
+                            <span class="modern-status-pulse"></span>
+                            <span id="voiceCallStatusText">Calling...</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Bottom Active Call Controls (Mute, Speaker, End) -->
-            <div class="ios-active-controls">
-                <!-- Mute Mic -->
-                <div class="ios-ctrl-col">
-                    <button type="button" class="ios-ctrl-btn control-btn" id="btnToggleVoiceMute" title="Mute Microphone">
-                        <i class="fas fa-microphone"></i>
-                    </button>
-                    <span class="ios-ctrl-label">Mute</span>
-                </div>
+            <!-- Bottom Floating Glassmorphism Control Dock -->
+            <div class="modern-call-bottom">
+                <div class="modern-glass-dock">
+                    <!-- Mute Button -->
+                    <div class="modern-dock-item">
+                        <button type="button" class="modern-dock-btn control-btn" id="btnToggleVoiceMute" title="Mute Microphone" aria-label="Mute Microphone">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <span class="modern-dock-label">Mute</span>
+                    </div>
 
-                <!-- Speaker Out -->
-                <div class="ios-ctrl-col">
-                    <button type="button" class="ios-ctrl-btn control-btn active" id="btnToggleVoiceSpeaker" title="Speaker Out">
-                        <i class="fas fa-volume-high"></i>
-                    </button>
-                    <span class="ios-ctrl-label">Speaker</span>
-                </div>
+                    <!-- Speaker Output Button -->
+                    <div class="modern-dock-item">
+                        <button type="button" class="modern-dock-btn control-btn active" id="btnToggleVoiceSpeaker" title="Speaker Output" aria-label="Speaker Output">
+                            <i class="fas fa-volume-high"></i>
+                        </button>
+                        <span class="modern-dock-label">Speaker</span>
+                    </div>
 
-                <!-- End Call -->
-                <div class="ios-ctrl-col">
-                    <button type="button" class="ios-ctrl-btn end call-btn-circle" id="btnEndVoiceCall" title="End Call">
-                        <i class="fas fa-phone-alt ios-icon-decline"></i>
-                    </button>
-                    <span class="ios-ctrl-label">End</span>
+                    <!-- End Call Button (Big Ergonomic Red) -->
+                    <div class="modern-dock-item">
+                        <button type="button" class="modern-dock-btn end call-btn-circle" id="btnEndVoiceCall" title="End Call" aria-label="End Call">
+                            <i class="fas fa-phone-alt modern-icon-hangup"></i>
+                        </button>
+                        <span class="modern-dock-label" style="color:#FF453A;">End</span>
+                    </div>
                 </div>
             </div>
         </div>
