@@ -459,6 +459,17 @@ $userAvatar = $currentUser['profile_image'] ?
                 </div>
             </div>
 
+            <!-- Background Call / Notification Permission Banner -->
+            <div id="notifPermissionBanner" style="display:none;margin:8px 16px;padding:10px 14px;background:rgba(233,30,99,0.12);border:1px solid var(--primary);border-radius:12px;align-items:center;justify-content:space-between;gap:8px;">
+                <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);">
+                    <i class="fas fa-bell" style="color:var(--primary);font-size:15px;"></i>
+                    <span>Oggolow ogaysiisyada si wicitaanadu kuugu soo dhacaan marka aad app-ka ka maqan tahay.</span>
+                </div>
+                <button type="button" id="btnEnableNotif" class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px;white-space:nowrap;border-radius:8px;">
+                    Oggolow
+                </button>
+            </div>
+
             <div class="search-box-container">
                 <div class="search-input-wrap">
                     <i class="fas fa-search"></i>

@@ -102,6 +102,27 @@ class CallController {
             });
         }
 
+        // Notification Permission Dashboard Banner
+        const banner = document.getElementById('notifPermissionBanner');
+        const btnEnable = document.getElementById('btnEnableNotif');
+        if (banner && 'Notification' in window) {
+            if (Notification.permission !== 'granted') {
+                banner.style.display = 'flex';
+                if (btnEnable) {
+                    btnEnable.addEventListener('click', () => {
+                        Notification.requestPermission().then(perm => {
+                            if (perm === 'granted') {
+                                banner.style.display = 'none';
+                                if (typeof showToast === 'function') showToast('Ogaysiisyada wicitaanka waa la oggolaaday!', 'success');
+                            }
+                        }).catch(() => {});
+                    });
+                }
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
         // End Active Call
         const endBtns = [document.getElementById('btnEndVoiceCall'), document.getElementById('btnEndVideoCall')];
         endBtns.forEach(b => {
@@ -975,23 +996,39 @@ window.acceptIncomingCall = function() {
 // Incoming call delivery is started by the call module itself, independently
 // from dashboard/message initialization so it cannot be skipped by that code.
 let incomingCallRequestPending = false;
+let lastCallCheckTime = 0;
 
 async function checkForIncomingCall() {
+    const now = Date.now();
+    // Safety check: if request was pending for more than 4 seconds, force reset
+    if (incomingCallRequestPending && (now - lastCallCheckTime > 4000)) {
+        incomingCallRequestPending = false;
+    }
     if (incomingCallRequestPending) return;
     incomingCallRequestPending = true;
+    lastCallCheckTime = now;
+
+    let abortController = null;
+    let timeoutId = null;
+    if (typeof AbortController === 'function') {
+        abortController = new AbortController();
+        timeoutId = setTimeout(() => {
+            try { abortController.abort(); } catch (e) {}
+        }, 3500);
+    }
+
     try {
-        const response = await fetch('api/calls/incoming.php', { cache: 'no-store', credentials: 'same-origin' });
-        if (!response.ok) {
-            console.warn('[Call] Incoming-call endpoint returned HTTP', response.status);
-            return;
-        }
+        const fetchOpts = { cache: 'no-store', credentials: 'same-origin' };
+        if (abortController) fetchOpts.signal = abortController.signal;
+
+        const response = await fetch('api/calls/incoming.php', fetchOpts);
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!response.ok) return;
+
         const text = await response.text();
         if (!text || !text.trim()) return;
         const result = JSON.parse(text);
-        if (!result.success) {
-            console.warn('[Call] Incoming-call endpoint error:', result.message || 'Unknown error');
-            return;
-        }
+        if (!result || !result.success) return;
 
         const call = result.data;
         if (call) {
@@ -1022,15 +1059,67 @@ async function checkForIncomingCall() {
             controller.pendingIncomingPayload = null;
         }
     } catch (error) {
-        console.warn('[Call] Could not check for incoming calls:', error);
+        // Network error or aborted - keep polling
     } finally {
+        if (timeoutId) clearTimeout(timeoutId);
         incomingCallRequestPending = false;
     }
 }
 
 window.checkForIncomingCall = checkForIncomingCall;
+
+// Web Worker Background Timer: Prevents mobile browsers (Chrome / Safari)
+// from freezing the call poller when the tab is hidden, screen is locked, or user is in another app.
+function initBackgroundCallWorker() {
+    try {
+        const workerScript = `
+            let callTimer = null;
+            let signalTimer = null;
+            self.onmessage = function(e) {
+                if (e.data === 'start') {
+                    if (!callTimer) {
+                        callTimer = setInterval(() => self.postMessage('check_call'), 1000);
+                    }
+                    if (!signalTimer) {
+                        signalTimer = setInterval(() => self.postMessage('poll_signal'), 400);
+                    }
+                } else if (e.data === 'stop') {
+                    if (callTimer) clearInterval(callTimer);
+                    if (signalTimer) clearInterval(signalTimer);
+                    callTimer = null;
+                    signalTimer = null;
+                }
+            };
+        `;
+        const blob = new Blob([workerScript], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl);
+        worker.onmessage = (e) => {
+            if (e.data === 'check_call') {
+                checkForIncomingCall();
+            } else if (e.data === 'poll_signal') {
+                if (typeof pollIncomingCallOffer === 'function') pollIncomingCallOffer();
+            }
+        };
+        worker.postMessage('start');
+        console.log('[Call] Background anti-freeze Web Worker poller active.');
+    } catch (e) {
+        console.warn('[Call] Web Worker not supported in this environment, falling back to window intervals:', e);
+        setInterval(checkForIncomingCall, 1000);
+        setInterval(pollIncomingCallOffer, 400);
+    }
+}
+
+initBackgroundCallWorker();
 checkForIncomingCall();
-setInterval(checkForIncomingCall, 1000);
+
+// Immediate wake-up check whenever the tab/device becomes visible again
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        incomingCallRequestPending = false;
+        checkForIncomingCall();
+    }
+});
 
 // Poll the persisted offer independently of WebSocket availability. This is
 // what lets an early Accept tap wait for and then consume the caller's SDP.
