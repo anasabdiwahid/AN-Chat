@@ -30,7 +30,8 @@ class WebRTCManager {
         const fallbackStunServers = [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' }
         ];
         this.iceConfig = {
             iceServers: [...(configuredIceServers.length ? configuredIceServers : fallbackStunServers),
@@ -81,6 +82,15 @@ class WebRTCManager {
     // iOS Safari requires audio playback to be unlocked during a real user
     // gesture. Accept can wait for SDP, so unlock immediately on the tap.
     unlockAudioOutput() {
+        const remoteAudio = document.getElementById('remoteAudio');
+        if (remoteAudio) {
+            try {
+                remoteAudio.muted = false;
+                remoteAudio.volume = 1;
+                remoteAudio.play().catch(() => {});
+            } catch (e) {}
+        }
+
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) return Promise.resolve(false);
         try {
@@ -134,12 +144,17 @@ class WebRTCManager {
                 throw new Error('Browser-kan ma taageerayo wicitaan cod ah.');
             }
             this.localStream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                },
                 video: callType === 'video'
             });
             if (!this.localStream || !this.localStream.getAudioTracks().length) {
                 throw new Error('Makarafoon lama helin. Fadlan oggolow microphone-ka browser-ka.');
             }
+            this.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
 
             if (callType === 'video') {
                 const localVideo = document.getElementById('localVideo');
@@ -183,8 +198,26 @@ class WebRTCManager {
                 sdp: this.localOffer
             });
             if (!offerSignal) throw new Error('Offer-ka wicitaanka server-ka ma gaarin. Hubi call_signals database-ka.');
+
+            // Also dispatch immediately over WebSocket if connected
+            this.sendWs({
+                type: 'call_offer',
+                target_user_id: receiverId,
+                call_id: this.currentCallId,
+                call_type: callType,
+                caller_name: window.CURRENT_USER ? window.CURRENT_USER.fullname : 'A/N User',
+                caller_image: window.CURRENT_USER ? window.CURRENT_USER.profile_image : '',
+                sdp: this.localOffer
+            });
+
             for (const candidate of (this.pendingLocalIceCandidates || [])) {
                 await this.sendCallSignal('ice', { candidate });
+                this.sendWs({
+                    type: 'call_ice',
+                    target_user_id: receiverId,
+                    call_id: this.currentCallId,
+                    candidate: candidate
+                });
             }
             this.pendingLocalIceCandidates = [];
             return true;
@@ -329,61 +362,79 @@ class WebRTCManager {
         // Remote track received -> Attach to Audio and/or Video elements
         this.peerConnection.ontrack = (event) => {
             console.log('[WebRTC] Received remote track:', event.track.kind, event.track.readyState);
-            event.track.onunmute = () => console.info('[WebRTC] Remote track is now unmuted:', event.track.kind);
             this.remoteStream = event.streams && event.streams[0]
                 ? event.streams[0]
                 : (this.remoteStream || new MediaStream());
-            if (!event.streams || !event.streams[0]) this.remoteStream.addTrack(event.track);
+            if (!event.streams || !event.streams[0]) {
+                this.remoteStream.addTrack(event.track);
+            }
 
-            // 1. Voice audio output
+            // 1. Direct Voice audio output via HTML5 Audio element
             let remoteAudio = document.getElementById('remoteAudio');
             if (!remoteAudio) {
                 remoteAudio = document.createElement('audio');
                 remoteAudio.id = 'remoteAudio';
                 remoteAudio.autoplay = true;
                 remoteAudio.playsInline = true;
-                remoteAudio.muted = false;
-                remoteAudio.volume = 1;
-                remoteAudio.style.display = 'none';
+                remoteAudio.style.position = 'fixed';
+                remoteAudio.style.top = '-9999px';
+                remoteAudio.style.left = '-9999px';
+                remoteAudio.style.width = '1px';
+                remoteAudio.style.height = '1px';
+                remoteAudio.style.opacity = '0.001';
+                remoteAudio.style.pointerEvents = 'none';
                 document.body.appendChild(remoteAudio);
             }
-            try {
+
+            remoteAudio.autoplay = true;
+            remoteAudio.playsInline = true;
+            remoteAudio.muted = false;
+            remoteAudio.volume = 1;
+
+            if (remoteAudio.srcObject !== this.remoteStream) {
+                remoteAudio.srcObject = this.remoteStream;
+            }
+
+            const playRemoteAudio = () => {
+                if (!remoteAudio) return;
                 remoteAudio.muted = false;
                 remoteAudio.volume = 1;
-                remoteAudio.srcObject = this.remoteStream;
-                const audioTracks = this.remoteStream.getAudioTracks();
-                let audioContextPlaying = false;
-                if (audioTracks.length && this.audioContext && this.audioContext.state !== 'closed') {
-                    if (this.audioContext.state === 'suspended') this.audioContext.resume().catch(() => {});
-                    if (this.audioContext.state === 'running') {
-                        if (!this.remoteAudioSource) {
-                            const audioOnlyStream = new MediaStream(audioTracks);
-                            this.remoteAudioSource = this.audioContext.createMediaStreamSource(audioOnlyStream);
-                            this.remoteAudioSource.connect(this.audioContext.destination);
-                        }
-                        audioContextPlaying = true;
-                    }
-                }
-                if (!audioContextPlaying) {
-                    remoteAudio.play().catch(e => {
+                const playPromise = remoteAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
                         console.warn('[WebRTC] remoteAudio autoplay was blocked:', e);
-                        if (typeof showToast === 'function') showToast('Codka maqalka u taabo shaashadda hal mar.', 'info');
-                        document.addEventListener('pointerdown', () => remoteAudio.play().catch(() => {}), { once: true });
+                        const unlockOnce = () => {
+                            remoteAudio.play().catch(() => {});
+                            document.removeEventListener('click', unlockOnce);
+                            document.removeEventListener('touchstart', unlockOnce);
+                        };
+                        document.addEventListener('click', unlockOnce, { once: true, passive: true });
+                        document.addEventListener('touchstart', unlockOnce, { once: true, passive: true });
                     });
                 }
-            } catch (err) {}
+            };
+
+            playRemoteAudio();
+
+            if (event.track) {
+                event.track.onunmute = () => {
+                    console.info('[WebRTC] Remote track is unmuted:', event.track.kind);
+                    playRemoteAudio();
+                };
+            }
 
             // 2. Video output (if video call)
             const remoteVideo = document.getElementById('remoteVideo');
-            if (remoteVideo) {
+            if (remoteVideo && this.callType === 'video') {
                 try {
-                    remoteVideo.muted = true; // Audio is played through remoteAudio, avoiding autoplay/mixed-audio issues.
-                    remoteVideo.srcObject = this.remoteStream;
+                    remoteVideo.muted = true; // Audio is played through remoteAudio to prevent echo and duplicate audio streams
+                    if (remoteVideo.srcObject !== this.remoteStream) {
+                        remoteVideo.srcObject = this.remoteStream;
+                    }
                     remoteVideo.onloadedmetadata = () => console.info('[WebRTC] Remote video metadata loaded:', remoteVideo.videoWidth, remoteVideo.videoHeight);
                     remoteVideo.onplaying = () => console.info('[WebRTC] Remote video is playing.');
                     remoteVideo.play().catch(e => {
                         console.warn('[WebRTC] remoteVideo autoplay:', e);
-                        if (typeof showToast === 'function') showToast('Muuqaalka qofka kale lama bilaabi karin. Taabo shaashadda mar kale.', 'info');
                     });
                 } catch (err) {}
             }
@@ -392,6 +443,14 @@ class WebRTCManager {
         // ICE candidate found -> forward to peer
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.activePeerId) {
+                // Immediate delivery via WebSocket
+                this.sendWs({
+                    type: 'call_ice',
+                    target_user_id: this.activePeerId,
+                    call_id: this.currentCallId,
+                    candidate: event.candidate
+                });
+
                 if (!this.currentCallId) {
                     this.pendingLocalIceCandidates = this.pendingLocalIceCandidates || [];
                     this.pendingLocalIceCandidates.push(event.candidate);
@@ -466,12 +525,21 @@ class WebRTCManager {
         // Do not mark the call answered until this device has microphone access
         // and has built a real SDP answer containing its audio track.
         this.localStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: this.callType === 'video'
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: this.callType === 'video' ? {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: 'user'
+            } : false
         });
         if (!this.localStream || !this.localStream.getAudioTracks().length) {
             throw new Error('Makarafoon lama helin. Fadlan oggolow microphone-ka browser-ka.');
         }
+        this.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
 
         if (this.callType === 'video' && this.localStream) {
             const localVideo = document.getElementById('localVideo');
@@ -489,6 +557,26 @@ class WebRTCManager {
 
         const answerSignal = await this.sendCallSignal('answer', { sdp: this.peerConnection.localDescription });
         if (!answerSignal) throw new Error('Jawaabta wicitaanka lama gaarsiin karin. Hubi xiriirka server-ka kadib isku day mar kale.');
+
+        // Also dispatch answer immediately via WebSocket
+        this.sendWs({
+            type: 'call_answer',
+            target_user_id: this.activePeerId,
+            call_id: this.currentCallId,
+            sdp: this.peerConnection.localDescription
+        });
+
+        for (const candidate of (this.pendingLocalIceCandidates || [])) {
+            await this.sendCallSignal('ice', { candidate });
+            this.sendWs({
+                type: 'call_ice',
+                target_user_id: this.activePeerId,
+                call_id: this.currentCallId,
+                candidate: candidate
+            });
+        }
+        this.pendingLocalIceCandidates = [];
+
         await fetch('api/calls/update.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

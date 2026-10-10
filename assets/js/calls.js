@@ -29,6 +29,12 @@ class CallController {
         if (btnAccept) {
             btnAccept.type = 'button';
             const unlockCallAudio = () => {
+                const remoteAudio = document.getElementById('remoteAudio');
+                if (remoteAudio) {
+                    remoteAudio.muted = false;
+                    remoteAudio.volume = 1;
+                    remoteAudio.play().catch(() => {});
+                }
                 if (!window.webrtc && typeof WebRTCManager === 'function') {
                     window.webrtc = new WebRTCManager(window.wsClient || null);
                 }
@@ -604,6 +610,12 @@ window.startCallWith = function(peerId, peerName, peerAvatar, callType = 'voice'
         window.webrtc = new WebRTCManager(window.wsClient || null);
     } else if (window.webrtc && window.wsClient) {
         window.webrtc.ws = window.wsClient;
+    }
+    const remoteAudio = document.getElementById('remoteAudio');
+    if (remoteAudio) {
+        remoteAudio.muted = false;
+        remoteAudio.volume = 1;
+        remoteAudio.play().catch(() => {});
     }
     if (window.webrtc) window.webrtc.unlockAudioOutput();
 
