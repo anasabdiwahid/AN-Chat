@@ -1,5 +1,155 @@
 // assets/js/calls.js - Call UI, Status State, Ringback, and Active Call Timer Controller
 
+// CallAudioKeepalive: Provides continuous background audio stream & pre-decoded ringtone buffer
+// to bypass mobile browser (Chrome / Safari) background freezing and autoplay blocking.
+class CallAudioKeepalive {
+    constructor() {
+        this.ctx = null;
+        this.silentNode = null;
+        this.html5Audio = null;
+        this.isUnlocked = false;
+        this.ringtoneBuffer = null;
+        this.activeRingtoneSource = null;
+        this.isRinging = false;
+    }
+
+    async init() {
+        if (this.isUnlocked) {
+            if (this.ctx && this.ctx.state === 'suspended') {
+                try { await this.ctx.resume(); } catch (e) {}
+            }
+            return;
+        }
+
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+                if (!this.ctx) {
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    await this.ctx.resume();
+                }
+
+                // Inaudible silent buffer looped forever.
+                // Mobile OS (Android/iOS) recognizes active media playback and prevents
+                // cgroup process suspension/freezing when user locks phone or switches apps.
+                if (!this.silentNode && this.ctx) {
+                    const buffer = this.ctx.createBuffer(1, Math.max(1, this.ctx.sampleRate), this.ctx.sampleRate);
+                    const source = this.ctx.createBufferSource();
+                    source.buffer = buffer;
+                    source.loop = true;
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.00001, this.ctx.currentTime);
+                    source.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    source.start(0);
+                    this.silentNode = source;
+                }
+            }
+
+            // HTML5 backup keepalive element
+            this.html5Audio = document.getElementById('keepAliveAudio');
+            if (this.html5Audio) {
+                this.html5Audio.volume = 0.001;
+                const p = this.html5Audio.play();
+                if (p !== undefined) p.catch(() => {});
+            }
+
+            // Also prime the incoming ringtone audio element
+            const rTone = document.getElementById('incomingRingtoneAudio');
+            if (rTone) {
+                rTone.volume = 1.0;
+                rTone.load();
+            }
+
+            // Preload and decode Apple iPhone Marimba MP3 into memory buffer
+            this.preloadRingtone();
+
+            this.isUnlocked = true;
+            console.log('[CallAudioKeepalive] Mobile background keepalive and audio engine active.');
+        } catch (e) {
+            console.warn('[CallAudioKeepalive] Init warning:', e);
+        }
+    }
+
+    async preloadRingtone() {
+        if (this.ringtoneBuffer || !this.ctx) return;
+        try {
+            const resp = await fetch('assets/sounds/ringtone.mp3');
+            if (resp.ok) {
+                const arrayBuf = await resp.arrayBuffer();
+                this.ringtoneBuffer = await this.ctx.decodeAudioData(arrayBuf);
+                console.log('[CallAudioKeepalive] Apple Marimba ringtone decoded into RAM.');
+            }
+        } catch (e) {
+            console.warn('[CallAudioKeepalive] Preload ringtone warning:', e);
+        }
+    }
+
+    playRingtone() {
+        this.isRinging = true;
+        this.stopRingtone(); // Clean any previous instance
+
+        // 1. Primary: Play pre-decoded Apple iPhone Marimba MP3 via running AudioContext
+        // Because the AudioContext is already running and unlocked, this is 100% immune to autoplay blocks.
+        if (this.ctx && this.ringtoneBuffer) {
+            try {
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume().catch(() => {});
+                }
+                const src = this.ctx.createBufferSource();
+                src.buffer = this.ringtoneBuffer;
+                src.loop = true;
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+                src.connect(gain);
+                gain.connect(this.ctx.destination);
+                src.start(0);
+                this.activeRingtoneSource = src;
+            } catch (e) {
+                console.warn('[CallAudioKeepalive] WebAudio buffer play warning:', e);
+            }
+        }
+
+        // 2. Parallel: Play HTML5 <audio> element
+        try {
+            const rTone = document.getElementById('incomingRingtoneAudio');
+            if (rTone) {
+                rTone.currentTime = 0;
+                rTone.volume = 1.0;
+                const p = rTone.play();
+                if (p !== undefined) p.catch(() => {});
+            }
+        } catch (e) {}
+    }
+
+    stopRingtone() {
+        this.isRinging = false;
+        if (this.activeRingtoneSource) {
+            try {
+                this.activeRingtoneSource.stop();
+                this.activeRingtoneSource.disconnect();
+            } catch (e) {}
+            this.activeRingtoneSource = null;
+        }
+
+        try {
+            const rTone = document.getElementById('incomingRingtoneAudio');
+            if (rTone) {
+                rTone.pause();
+                rTone.currentTime = 0;
+            }
+        } catch (e) {}
+    }
+
+    isPlaying() {
+        return !!this.activeRingtoneSource || (this.html5Audio && !this.html5Audio.paused);
+    }
+}
+
+window.callKeepalive = new CallAudioKeepalive();
+
 class CallController {
     constructor() {
         this.activeCallOverlay = document.getElementById('callModalOverlay');
@@ -102,24 +252,36 @@ class CallController {
             });
         }
 
-        // Notification Permission Dashboard Banner
+        // Notification & Background Call Audio Permission Banner
         const banner = document.getElementById('notifPermissionBanner');
         const btnEnable = document.getElementById('btnEnableNotif');
-        if (banner && 'Notification' in window) {
-            if (Notification.permission !== 'granted') {
-                banner.style.display = 'flex';
-                if (btnEnable) {
-                    btnEnable.addEventListener('click', () => {
-                        Notification.requestPermission().then(perm => {
+        if (banner) {
+            const checkBanner = () => {
+                if ('Notification' in window && Notification.permission === 'granted' && window.callKeepalive && window.callKeepalive.isUnlocked) {
+                    banner.style.display = 'none';
+                } else if ('Notification' in window && Notification.permission !== 'granted') {
+                    banner.style.display = 'flex';
+                }
+            };
+            checkBanner();
+
+            if (btnEnable) {
+                btnEnable.addEventListener('click', async () => {
+                    if (window.callKeepalive) {
+                        await window.callKeepalive.init();
+                    }
+                    if ('Notification' in window) {
+                        try {
+                            const perm = await Notification.requestPermission();
                             if (perm === 'granted') {
                                 banner.style.display = 'none';
-                                if (typeof showToast === 'function') showToast('Ogaysiisyada wicitaanka waa la oggolaaday!', 'success');
+                                if (typeof showToast === 'function') {
+                                    showToast('Ogaysiisyada iyo codka wicitaanka waa la oggolaaday!', 'success');
+                                }
                             }
-                        }).catch(() => {});
-                    });
-                }
-            } else {
-                banner.style.display = 'none';
+                        } catch (e) {}
+                    }
+                });
             }
         }
 
@@ -466,40 +628,14 @@ class CallController {
 
     initAudioUnlock() {
         const unlock = () => {
-            const rTone = document.getElementById('incomingRingtoneAudio');
-            const rBack = document.getElementById('outgoingRingbackAudio');
-            const rAudio = document.getElementById('remoteAudio');
-
-            [rTone, rBack, rAudio].forEach(el => {
-                if (el) {
-                    try {
-                        const playPromise = el.play();
-                        if (playPromise !== undefined) {
-                            playPromise.then(() => {
-                                el.pause();
-                                el.currentTime = 0;
-                            }).catch(() => {});
-                        }
-                    } catch (e) {}
-                }
-            });
-
-            try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                if (AudioCtx) {
-                    const ctx = new AudioCtx();
-                    ctx.resume().then(() => ctx.close()).catch(() => {});
-                }
-            } catch (e) {}
-
-            window.removeEventListener('click', unlock, true);
-            window.removeEventListener('touchstart', unlock, true);
-            window.removeEventListener('keydown', unlock, true);
+            if (window.callKeepalive) {
+                window.callKeepalive.init();
+            }
         };
 
-        window.addEventListener('click', unlock, { capture: true, once: true });
-        window.addEventListener('touchstart', unlock, { capture: true, once: true });
-        window.addEventListener('keydown', unlock, { capture: true, once: true });
+        ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(evt => {
+            window.addEventListener(evt, unlock, { passive: true });
+        });
     }
 
     async acquireWakeLock() {
@@ -655,30 +791,26 @@ class CallController {
         if (this.isRinging) return;
         this.isRinging = true;
 
-        // 1. Primary: Loud HTML5 Audio Ringtone
-        try {
-            const ringAudio = document.getElementById('incomingRingtoneAudio');
-            if (ringAudio) {
-                ringAudio.volume = 1.0;
-                ringAudio.currentTime = 0;
-                const p = ringAudio.play();
-                if (p !== undefined) {
-                    p.catch(e => {
-                        console.warn('[Call] Ringtone audio play prevented by browser policy, using fallback:', e);
-                        this.playWebAudioRingtone();
-                    });
+        if (window.callKeepalive) {
+            window.callKeepalive.playRingtone();
+        } else {
+            try {
+                const ringAudio = document.getElementById('incomingRingtoneAudio');
+                if (ringAudio) {
+                    ringAudio.volume = 1.0;
+                    ringAudio.currentTime = 0;
+                    ringAudio.play().catch(() => {});
                 }
-            } else {
-                this.playWebAudioRingtone();
-            }
-        } catch (e) {
-            this.playWebAudioRingtone();
+            } catch (e) {}
         }
     }
 
     stopRingtone() {
         this.isRinging = false;
         clearTimeout(this.ringtoneTimeout);
+        if (window.callKeepalive) {
+            window.callKeepalive.stopRingtone();
+        }
         try {
             const ringAudio = document.getElementById('incomingRingtoneAudio');
             if (ringAudio) {
@@ -688,7 +820,7 @@ class CallController {
         } catch (e) {}
 
         if (this.audioContext) {
-            this.audioContext.close().catch(() => {});
+            try { this.audioContext.close().catch(() => {}); } catch (e) {}
             this.audioContext = null;
         }
     }
@@ -1048,6 +1180,11 @@ async function checkForIncomingCall() {
                     caller_name: call.caller_name,
                     caller_image: call.caller_image
                 });
+            } else if (!anotherCallIsActive && current && parseInt(current.call_id) === parseInt(call.id)) {
+                // Ensure ringtone is actively playing if incoming call is still ringing
+                if (controller.isRinging && window.callKeepalive && !window.callKeepalive.isPlaying()) {
+                    window.callKeepalive.playRingtone();
+                }
             }
         } else if (window.callController && window.callController.pendingIncomingPayload) {
             const controller = window.callController;
@@ -1104,10 +1241,12 @@ function initBackgroundCallWorker() {
         worker.postMessage('start');
         console.log('[Call] Background anti-freeze Web Worker poller active.');
     } catch (e) {
-        console.warn('[Call] Web Worker not supported in this environment, falling back to window intervals:', e);
-        setInterval(checkForIncomingCall, 1000);
-        setInterval(pollIncomingCallOffer, 400);
+        console.warn('[Call] Web Worker not supported in this environment:', e);
     }
+
+    // High-reliability parallel interval on window for extra redundancy
+    setInterval(checkForIncomingCall, 1200);
+    setInterval(pollIncomingCallOffer, 400);
 }
 
 initBackgroundCallWorker();

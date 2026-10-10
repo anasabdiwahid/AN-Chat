@@ -14,7 +14,7 @@ $stmt = $db->prepare("
     JOIN users u ON u.id = c.caller_id
     WHERE c.receiver_id = :user_id
       AND c.status = 'calling'
-      AND c.created_at >= DATE_SUB(NOW(), INTERVAL 50 SECOND)
+      AND (c.created_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND) OR TIMESTAMPDIFF(SECOND, c.created_at, NOW()) <= 90)
     ORDER BY c.id DESC
     LIMIT 1
 ");

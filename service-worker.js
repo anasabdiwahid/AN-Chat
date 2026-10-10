@@ -1,5 +1,5 @@
 // service-worker.js - Root Service Worker for A/N Chat
-const CACHE_NAME = 'an-chat-cache-v8';
+const CACHE_NAME = 'an-chat-cache-v10';
 
 const STATIC_ASSETS = [
     'assets/css/variables.css',
